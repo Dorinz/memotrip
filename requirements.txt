@@ -1,0 +1,23 @@
+# build_trip.py        - stdlib only
+# select_photos.py      - Pillow always; google-genai only for the --ai path
+# fetch_photos.py       - the google-auth trio
+
+Pillow>=10.4
+
+# fetch_photos.py (Google Photos Picker API)
+google-auth>=2.30
+google-auth-oauthlib>=1.2
+requests>=2.32
+
+# select_photos.py, --ai photo selection (optional; --no-ai needs none of this)
+google-genai>=0.8
+
+# parse_docs.py (logistics docs -> draft spec)
+pypdf>=4.0
+python-docx>=1.1
+
+# webapp/ (Phase 4 — local MVP)
+fastapi>=0.110
+uvicorn[standard]>=0.29
+jinja2>=3.1
+python-multipart>=0.0.9

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Trip Journal</title>
+<style>
+  body{font-family:system-ui,'Segoe UI',Arial,sans-serif;max-width:720px;margin:40px auto;padding:0 18px;color:#163B3F;background:#FBF9F4;line-height:1.6}
+  h1{font-weight:800} h2{margin-top:40px;font-size:1.1rem;color:#4C6A6D}
+  label{display:block;font-weight:600;margin:18px 0 6px}
+  textarea,input[type=text]{width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;font:inherit;box-sizing:border-box}
+  textarea{min-height:130px;resize:vertical}
+  .hint{color:#52696B;font-size:.9rem;margin-top:4px}
+  button{margin-top:22px;background:#0E8478;color:#fff;border:0;border-radius:8px;padding:11px 22px;font:inherit;font-weight:600;cursor:pointer}
+  ul{padding:0;list-style:none} li{padding:8px 0;border-bottom:1px solid #eee}
+  a{color:#0E8478} .s{font-size:.85rem;color:#52696B}
+</style>
+</head>
+<body>
+  <h1>יומן מסע — מחולל</h1>
+  <p class="hint">תיאור חופשי של הטיול ו/או מסמכי לוגיסטיקה (PDF / DOCX). הצינור ירוץ אוטומטית.</p>
+  <form method="post" action="/trips" enctype="multipart/form-data">
+    <label>תיאור הטיול</label>
+    <textarea name="description" placeholder="לאן, מתי, מי, מה קרה בדרך..."></textarea>
+    <label>מסמכים (אופציונלי)</label>
+    <input type="file" name="docs" multiple accept=".pdf,.docx,.doc,.txt">
+    <label>אזור בעולם (עוזר לזיהוי מיקומים)</label>
+    <input type="text" name="region_hint" placeholder="למשל: Azores, Portugal">
+    <button type="submit">בונים דף</button>
+  </form>
+
+  {{TRIPS}}
+</body>
+</html>

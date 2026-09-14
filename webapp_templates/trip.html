@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Trip Journal — {{TID8}}</title>
+<style>
+  body{font-family:system-ui,'Segoe UI',Arial,sans-serif;max-width:760px;margin:36px auto;padding:0 18px;color:#163B3F;background:#FBF9F4;line-height:1.6}
+  a{color:#0E8478}
+  .stage{font-size:1.15rem;font-weight:700}
+  .bar{height:8px;background:#E3F1EF;border-radius:99px;overflow:hidden;margin:12px 0}
+  .bar>i{display:block;height:100%;background:linear-gradient(90deg,#1EACA0,#3C7DA6);width:20%;transition:width .4s}
+  pre{background:#fff;border:1px solid #e3e3e3;border-radius:8px;padding:12px;white-space:pre-wrap;font-size:.85rem;max-height:260px;overflow:auto;direction:ltr;text-align:left}
+  .row{display:flex;gap:12px;flex-wrap:wrap;margin:20px 0}
+  button,.btn{background:#0E8478;color:#fff;border:0;border-radius:8px;padding:10px 20px;font:inherit;font-weight:600;cursor:pointer;text-decoration:none;display:inline-block}
+  .btn.ghost{background:#fff;color:#0E8478;border:1px solid #0E8478}
+  .err{background:#fdecea;border:1px solid #f5c6cb;color:#a12; padding:12px;border-radius:8px;white-space:pre-wrap;direction:ltr;text-align:left;font-size:.82rem}
+  iframe{width:100%;height:70vh;border:1px solid #ddd;border-radius:10px;margin-top:16px;background:#fff}
+</style>
+</head>
+<body>
+  <p><a href="/">← טיול חדש</a></p>
+  <div class="stage" id="stage">…</div>
+  <div class="bar"><i id="fill"></i></div>
+  <pre id="log"></pre>
+  <div class="err" id="err" title="אזהרות" style="display:none"></div>
+
+  <div class="row" id="ready" style="display:none">
+    <a class="btn" id="open" target="_blank">פתח את הדף</a>
+    <a class="btn ghost" id="dl" download="trip.html">הורד HTML</a>
+    <button class="btn ghost" id="addphotos">הוסף תמונות מ‑Google Photos</button>
+    <button class="btn ghost" id="reroll">צבעים חדשים</button>
+    <form method="post" action="/trips/{{TID}}/rerun" style="display:inline"><button class="btn ghost">הרץ מחדש</button></form>
+  </div>
+
+  <div id="pickwrap" style="display:none;margin-top:16px">
+    <p>1. פותחים את בורר Google, בוחרים תמונות, לוחצים <b>Done</b>:</p>
+    <a class="btn" id="pickerlink" target="_blank">פתח את הבורר</a>
+    <p style="margin-top:14px">2. חוזרים לכאן ולוחצים:</p>
+    <button class="btn" id="donepick">סיימתי לבחור</button>
+  </div>
+
+  <iframe id="preview" style="display:none"></iframe>
+
+<script>
+const TID = "{{TID}}";
+const $ = id => document.getElementById(id);
+
+async function poll(){
+  const r = await fetch(`/trips/${TID}/status`);
+  const s = await r.json();
+  $("stage").textContent = s.stage || s.status || "";
+  $("log").textContent = (s.log || "").trim();
+  const steps = ["reading documents","parsing itinerary","geocoding","writing the story",
+                 "building the page","waiting for your photo picks","downloading photos",
+                 "choosing the best shots","done"];
+  let i = steps.findIndex(x => (s.stage||"").startsWith(x));
+  $("fill").style.width = (s.status==="ready" ? 100 : Math.max(10,(i+1)/steps.length*100)) + "%";
+
+  if(s.error){ $("err").style.display="block"; $("err").textContent = s.error; }
+  else $("err").style.display="none";
+
+  if(s.status === "ready"){
+    $("stage").textContent = "הדף מוכן ✓";
+    $("ready").style.display = "flex";
+    const url = `/data/${TID}/page.html?t=` + Date.now();
+    $("open").href = url; $("dl").href = url;
+    $("preview").src = url; $("preview").style.display = "block";
+    return;                                  // stop polling
+  }
+  setTimeout(poll, 1500);
+}
+poll();
+
+$("addphotos").onclick = async () => {
+  $("addphotos").disabled = true;
+  const r = await fetch(`/trips/${TID}/photos/start`, {method:"POST"});
+  const j = await r.json();
+  if(j.error){ alert(j.error); $("addphotos").disabled=false; return; }
+  $("pickerlink").href = j.picker_uri;
+  $("pickwrap").style.display = "block";
+};
+$("reroll").onclick = async () => {
+  $("reroll").disabled = true;
+  const r = await fetch(`/trips/${TID}/theme/reroll`, {method:"POST"});
+  const j = await r.json();
+  $("reroll").disabled = false;
+  if(j.error){ alert(j.error); return; }
+  const url = `/data/${TID}/page.html?t=` + Date.now();
+  $("open").href = url; $("dl").href = url; $("preview").src = url;
+};
+$("donepick").onclick = async () => {
+  await fetch(`/trips/${TID}/photos/finish`, {method:"POST"});
+  $("pickwrap").style.display = "none";
+  $("ready").style.display = "none";
+  poll();
+};
+</script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+# secrets — never commit
+credentials.json
+token.json
+.env
+
+# working data
+gphotos/
+dist/
+__pycache__/
+*.pyc
+trip_spec.draft.json
+geocode_cache.json
+
+# archived one-off Azores page (source docs, photos, built output) — not app code
+azores-archive/
+
+# webapp
+webapp_data/
+trips.db
+webapp.log
