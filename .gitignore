@@ -20,3 +20,6 @@ azores-archive/
 webapp_data/
 trips.db
 webapp.log
+
+# local Playwright MCP test artifacts (screenshots/snapshots)
+.playwright-mcp/
