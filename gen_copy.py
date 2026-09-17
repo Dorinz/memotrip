@@ -106,9 +106,10 @@ TRIP_SCHEMA = {
         "meta": {"type": "object", "properties": {"title": {"type": "string"}}},
         "hero": {"type": "object", "properties": {
             "eyebrow": {"type": "string"}, "h1": {"type": "string"}, "sub": {"type": "string"},
+            "region": {"type": "string"},
             "meta": {"type": "array", "items": {"type": "object", "properties": {
                 "n": {"type": "string"}, "l": {"type": "string"}}, "required": ["n", "l"]}},
-        }, "required": ["eyebrow", "h1", "sub", "meta"]},
+        }, "required": ["eyebrow", "h1", "sub", "region", "meta"]},
         "outro": {"type": "object", "properties": {
             "eyebrow": {"type": "string"}, "h2": {"type": "string"}, "p": {"type": "string"},
             "stats": {"type": "array", "items": {"type": "object", "properties": {
@@ -149,9 +150,11 @@ Itinerary:
 Produce JSON:
 - meta.title: a short page title.
 - hero.eyebrow: dates + a one-line hook. hero.h1: 2-4 words, may wrap one word in
-  <em></em>. hero.sub: two short sentences; put <br> between them. hero.meta:
-  4-5 {{n,l}} stat chips computed from the itinerary (islands / countries,
-  lodgings, flights, ferries, nights).
+  <em></em>. hero.sub: two short sentences; put <br> between them. hero.region:
+  2-4 words naming just the overall destination/region (e.g. "the Azores
+  islands"), general — not an itinerary detail or a specific place visited.
+  hero.meta: 4-5 {{n,l}} stat chips computed from the itinerary (islands /
+  countries, lodgings, flights, ferries, nights).
 - outro.eyebrow, outro.h2 (2-4 words), outro.p (2-3 sentences, the emotional
   close), outro.stats: 3 {{n,l}} chips.
 {drama_line}
@@ -242,7 +245,7 @@ def generate_copy(spec: dict, description: str, docs_text: str = "", *,
         for block in ("hero", "outro"):
             spec.setdefault(block, {})
             fill(spec[block], trip.get(block, {}),
-                 ("eyebrow", "h1", "h2", "sub", "p", "meta", "stats"), overwrite)
+                 ("eyebrow", "h1", "h2", "sub", "p", "region", "meta", "stats"), overwrite)
         if has_drama and trip.get("drama"):
             for it in spec["timeline"]:
                 if it.get("type") == "drama":

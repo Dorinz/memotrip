@@ -1,0 +1,44 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "layout-transition",
+        "value": "*",
+        "files": [
+          "trip_template.html"
+        ],
+        "createdAt": "2026-09-15T22:36:52.594Z",
+        "reason": "pre-existing #rail-fill height transition, identical to production trip_template.html; element is position:fixed/out-of-flow so no reflow of surrounding content (same exception already recorded for the other template variants)"
+      },
+      {
+        "rule": "broken-image",
+        "value": "*",
+        "files": [
+          "trip_template.html"
+        ],
+        "createdAt": "2026-09-15T22:50:59.400Z",
+        "reason": "hero-card <img> has no static src by design — it's set by setHeroPhoto() JS before the card's [hidden] attribute is removed, so a broken image is never actually rendered; card stays hidden forever if no trip photo exists"
+      },
+      {
+        "rule": "pulsing-dot",
+        "value": "*",
+        "files": [
+          "webapp_templates/index.html"
+        ],
+        "createdAt": "2026-09-16T13:45:44.502Z",
+        "reason": "user explicitly asked to leave this as-is for now (2026-09-16): \"תשאיר ככה בינתיים אל תתקן\" — also plausibly justified anyway since the dot only shows on the genuinely-active 'running' status, not the merely-waiting 'queued' one"
+      },
+      {
+        "rule": "layout-transition",
+        "value": "*",
+        "files": [
+          "webapp_templates/trip.html"
+        ],
+        "createdAt": "2026-09-16T14:33:13.342Z",
+        "reason": "pre-existing .bar>i progress-fill width transition (predates this session's changes, which only touched the iframe/preview-wrap section) - a small isolated 8px-tall progress bar, and the transition IS its function (smooth progress updates), same exception category already recorded for #rail-fill elsewhere"
+      }
+    ]
+  }
+}

@@ -292,8 +292,10 @@ def pick_diverse(cands: list[Photo], n: int, spread_dist: int) -> list[Photo]:
     return picks[:n]
 
 
-def pick_with_gemini(cands: list[Photo], n: int, model: str, api_key: str,
-                     stay_title: str) -> list[Photo] | None:
+def _gemini_pick_raw(cands: list[Photo], n: int, model: str, api_key: str,
+                     instruction: str) -> list[Photo] | None:
+    """Shared Gemini call: send `instruction` + every candidate as a labelled
+    thumbnail, get back an ordered list of picks (best first)."""
     try:
         import gemini_util as gu
         from google.genai import types
@@ -302,11 +304,7 @@ def pick_with_gemini(cands: list[Photo], n: int, model: str, api_key: str,
         return None
     try:
         cl = gu.client(api_key)
-        parts = [types.Part.from_text(text=(
-            f"These are candidate photos for one leg of a trip ('{stay_title}'). "
-            f"Choose the {n} best to show together. Favour sharp, well-exposed, "
-            f"interesting frames, and make the set varied - different scenes, "
-            f"subjects and moments, never near-duplicates. Reply as JSON."))]
+        parts = [types.Part.from_text(text=instruction)]
         for i, p in enumerate(cands):
             with Image.open(p.path) as im:
                 im = ImageOps.exif_transpose(im).convert("RGB")
@@ -343,13 +341,39 @@ def pick_with_gemini(cands: list[Photo], n: int, model: str, api_key: str,
         return None
 
 
+def pick_with_gemini(cands: list[Photo], n: int, model: str, api_key: str,
+                     stay_title: str) -> list[Photo] | None:
+    instruction = (
+        f"These are candidate photos for one leg of a trip ('{stay_title}'). "
+        f"Choose the {n} best to show together. Favour sharp, well-exposed, "
+        f"interesting frames, and make the set varied - different scenes, "
+        f"subjects and moments, never near-duplicates. Reply as JSON.")
+    return _gemini_pick_raw(cands, n, model, api_key, instruction)
+
+
+def pick_hero_with_gemini(cands: list[Photo], n: int, model: str, api_key: str) -> list[Photo] | None:
+    """For the page's hero background + featured card, not a day's gallery:
+    the single most striking, sweeping SCENERY shots from the whole trip,
+    ranked best-first — deliberately independent of any day's own picks."""
+    instruction = (
+        f"These are candidate photos from an entire trip. Choose the {n} most beautiful, "
+        f"sweeping SCENERY / landscape shots - the kind that would work as a magazine "
+        f"cover or a page's hero background image. Favour wide vistas, striking light, "
+        f"dramatic nature or cityscapes. Avoid close-ups of food, documents, indoor detail "
+        f"shots, or a photo where a person's face fills the frame. Order picks best first. "
+        f"It's completely fine if a pick also belongs to (and will separately appear in) "
+        f"its own day's gallery later on the page. Reply as JSON.")
+    return _gemini_pick_raw(cands, n, model, api_key, instruction)
+
+
 # ---------------------------------------------------------------------- output
 
 def export(picks: list[Photo], key: str, images_dir: pathlib.Path, max_px: int,
-           rel_prefix: str = "images/trips") -> list[str]:
+           rel_prefix: str = "images/trips", preserve_order: bool = False) -> list[str]:
     images_dir.mkdir(parents=True, exist_ok=True)
     rel: list[str] = []
-    for i, p in enumerate(sorted(picks, key=lambda x: (x.taken or dt.datetime.min)), start=1):
+    ordered = picks if preserve_order else sorted(picks, key=lambda x: (x.taken or dt.datetime.min))
+    for i, p in enumerate(ordered, start=1):
         dst = images_dir / f"{key}-{i}.jpg"
         with Image.open(p.path) as im:
             im = ImageOps.exif_transpose(im).convert("RGB")
@@ -373,7 +397,7 @@ def select(photos: list[Photo], spec: dict, images_dir: pathlib.Path, *,
     into `photos[key]['lodging']`."""
     targets = load_targets(spec)
     if not targets:
-        raise ValueError("no day/layover items found in the spec (run expand_days first)")
+        raise ValueError("לא נמצאו ימים/עצירות במסלול הטיול")
     tz_off = tz_offset if tz_offset is not None else float(spec.get("meta", {}).get("tz_offset_hours", 0))
     lodging_dir = lodging_dir if lodging_dir is not None else images_dir.parent / "lodging"
 
@@ -424,6 +448,22 @@ def select(photos: list[Photo], spec: dict, images_dir: pathlib.Path, *,
                                       else export(lordered, t.key, lodging_dir, max_px,
                                                   rel_prefix="images/lodging"))
 
+    # the page's hero background + "featured" card: the most striking SCENERY
+    # shots from the WHOLE trip (not bucketed by day), independent of any
+    # single day's own picks - it's fine if a hero pick also appears again in
+    # its own day's gallery below. Ranked best-first: [0] -> background, [1] -> card.
+    hero_n = 2
+    hero_pool = sorted(photos, key=lambda x: x.score, reverse=True)[:max(candidates, hero_n * 6)]
+    hero_chosen = None
+    if hero_pool:
+        if ai_on and len(hero_pool) > hero_n:
+            hero_chosen = pick_hero_with_gemini(hero_pool, hero_n, model, api_key)
+        if not hero_chosen:
+            hero_chosen = pick_diverse(hero_pool, hero_n, spread_distance)
+    if hero_chosen:
+        log(f"hero: picked {len(hero_chosen)} scenic photo(s) from the whole trip"
+            + ("  [gemini]" if ai_on and len(hero_pool) > hero_n else "  [offline]"))
+
     if not dry_run:
         by_id = {t.id: t for t in targets}
         for tid, paths in plan.items():
@@ -437,6 +477,9 @@ def select(photos: list[Photo], spec: dict, images_dir: pathlib.Path, *,
             t = by_id[tid]
             spec.setdefault("photos", {}).setdefault(t.key, {"lodging": [], "trip": []})
             spec["photos"][t.key]["lodging"] = paths
+        if hero_chosen:
+            spec.setdefault("hero", {})["photos"] = export(
+                hero_chosen, "hero", images_dir, max_px, preserve_order=True)
     return spec
 
 
@@ -502,7 +545,8 @@ def main() -> int:
     total = (sum(len(it.get("tripPhotos", [])) for it in spec.get("timeline", []) if it.get("type") == "day")
              + sum(len(v.get("trip", [])) for v in spec.get("photos", {}).values()))
     lodging_total = sum(len(v.get("lodging", [])) for v in spec.get("photos", {}).values())
-    print(f"\nwrote {total} trip + {lodging_total} lodging photo(s) into "
+    hero_total = len(spec.get("hero", {}).get("photos") or [])
+    print(f"\nwrote {total} trip + {lodging_total} lodging + {hero_total} hero photo(s) into "
           f"{a.images_dir}/ + {a.lodging_dir}/ and updated {a.spec}")
 
     if a.clean_source:

@@ -13,7 +13,8 @@ reference only; nothing in that folder is read by the app.)
 
 | file | what it is |
 |---|---|
-| `trip_template.html` | reusable shell: CSS, Leaflet map/animation JS, section renderers, `{{PLACEHOLDER}}` slots |
+| `trip_template.html` | **default** design: sticky sidebar identity + dark "itinerary row" day sections, adapted from a Figma community reference (see "Templates" below) |
+| `trip_template_classic.html` | the original single-column coastal design (Azores hand-built page) — kept as a reference/fallback, not currently wired into the webapp |
 | `build_trip.py` | fills the template from a trip's spec → its `page.html` |
 | `parse_docs.py` | Phase 3 — logistics PDF/DOCX → a draft spec (+ `expand_days()`) |
 | `gen_copy.py` | Phase 3 — spec + description → the Hebrew (or other) prose |
@@ -63,7 +64,14 @@ the previously-missing transit + stay both appear.
 ## trip_spec.json shape
 
 - `meta` — `title`, `tz_offset_hours`
-- `hero` — `eyebrow`, `h1` (may contain `<em>`), `sub` (may contain `<br>`), `meta[]` of `{n,l}`
+- `hero` — `eyebrow`, `h1` (may contain `<em>`), `sub` (may contain `<br>`), `region`
+  (2-4 words naming just the overall destination, e.g. "the Azores islands" —
+  general, not an itinerary detail; shown on `trip_template.html`'s hero "featured"
+  card), `photos[]` (0-2 paths — the pipeline's own pick of the most striking
+  SCENERY shots from the *whole* trip, written by `select_photos.py`'s hero pass;
+  `trip_template.html` uses `photos[0]` as the hero background and `photos[1]`
+  in the featured card, falling back to day-1's own photo when absent, e.g. for
+  specs built before this field existed), `meta[]` of `{n,l}`
 - `outro` — `eyebrow`, `h2`, `p`, `stats[]` of `{n,l}`
 - `economics` (optional) — `eyebrow`, `h2`, `intro`, `big[]` `{v,k}`, `bars[]` `{label,amt,width}`,
   `notes[]` `{k,html}`, `foot`. The automated pipeline never produces this (no cost
@@ -151,7 +159,17 @@ call fails, e.g. a quota 429) a deterministic quality+diversity picker.
 Chosen photos are re-saved (`--max-px` 1600, JPEG q82, metadata stripped) into
 `images/trips/<dayId>-N.jpg` (dayId like `capelas-d2`) and `images/lodging/<key>-N.jpg`,
 written onto the `day` item's `tripPhotos` (or `photos[key]["trip"]` for a
-`layover`) and `photos[key]["lodging"]`. Then run `build_trip.py`.
+`layover`) and `photos[key]["lodging"]`.
+
+Separately (once per run, not per-day): also picks the **2 best scenery shots
+from the whole trip** — the same quality-scored pool as above, but judged for
+"sweeping landscape/cityscape, hero-worthy" rather than "varied set for this
+day", and completely independent of any day's own picks (duplication is fine —
+a hero pick still shows up again in its own day's gallery). Written to
+`hero.photos[]` (best-first) and exported to `images/trips/hero-N.jpg`.
+`trip_template.html` uses these for the page's hero background + featured card.
+
+Then run `build_trip.py`.
 
 Knobs: `--per-region --min --candidates --dupe-distance --spread-distance
 --blur-min --max-px --tz-offset --no-ai --lodging-count --lodging-dir
@@ -218,13 +236,25 @@ python build_trip.py                                  # -> the page
 ## Color theme
 
 Every trip gets its own palette, generated once (`palette.py`, pure color
-theory — random accent hue + an analogous partner hue + a near-complementary
-"paper" background hue, HSL-derived, with a contrast pass so text always meets
-WCAG AA against the background) and stored in `trip_spec.json`'s `theme` block.
-No external service. Rebuilding a trip (e.g. after adding photos) re-reads the
-same stored theme, so colors never shift between rebuilds. A spec with no
-`theme` renders with `palette.DEFAULT` — the Azores page's original hand-tuned
-colors (so it keeps looking the same).
+theory, no external service) from **three deliberately distinct hue families**
+rather than one hue at different shades — so the result is randomized but never
+monochrome:
+- `bg_hue` — always a warm cream/parchment range (28-48°), so every trip reads
+  as the same kind of warm travel journal regardless of the accent;
+- `accent_hue` — the vivid "turquoise" accent (links, map marks, the sidebar
+  block), rotated across a wide cool-to-vivid arc (140-320°) that's kept clear
+  of the cream range so it always pops against the paper;
+- `ink_hue` — offset far from the accent (70-140°, e.g. turquoise accent +
+  navy ink), used for text, the "sea" secondary accent, and the dark
+  "itinerary row" day-sections — so a panel like the sidebar shows real
+  bg/text hue contrast instead of one hue at two lightnesses.
+
+A contrast pass (WCAG-ratio checked against the actual background each color
+sits on) guarantees legible pairs regardless of which hues come out. Stored in
+`trip_spec.json`'s `theme` block; rebuilding a trip (e.g. after adding photos)
+re-reads the same stored theme, so colors never shift between rebuilds. A spec
+with no `theme` renders with `palette.DEFAULT` — the Azores page's original
+hand-tuned colors (so it keeps looking the same).
 
 ```
 python palette.py [seed]     # print a sample palette + its contrast ratios

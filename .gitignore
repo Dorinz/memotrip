@@ -2,6 +2,7 @@
 credentials.json
 token.json
 .env
+session_secret.txt
 
 # working data
 gphotos/

@@ -65,7 +65,7 @@ def build(spec: dict, template: str) -> str:
 
     # economics is a bonus section — drop it entirely when the spec has no economics data
     if not (econ.get("bars") or econ.get("big") or econ.get("intro")):
-        out = re.sub(r"\n<!-- =+ ECONOMICS.*?</section>\n", "\n", out, flags=re.S)
+        out = re.sub(r"\n[ \t]*<!-- =+ ECONOMICS.*?</section>\n", "\n", out, flags=re.S)
 
     repl = {
         "{{TITLE}}": g(spec.get("meta"), "title", "Trip Journal"),
@@ -73,6 +73,8 @@ def build(spec: dict, template: str) -> str:
         "{{HERO_EYEBROW}}": g(hero, "eyebrow"),
         "{{HERO_H1}}": g(hero, "h1"),
         "{{HERO_SUB}}": g(hero, "sub"),
+        "{{HERO_REGION}}": g(hero, "region"),
+        "{{HERO_PHOTOS_JSON}}": _json_block(hero.get("photos") or []),
         "{{HERO_META}}": _stats(hero.get("meta") or [], 4),
 
         "{{OUTRO_EYEBROW}}": g(outro, "eyebrow"),
@@ -94,6 +96,10 @@ def build(spec: dict, template: str) -> str:
         "{{C_SEA}}": theme["sea"], "{{C_SEA_DEEP}}": theme["sea_deep"],
         "{{C_INK_RGB}}": theme["ink_rgb"], "{{C_TURQ_RGB}}": theme["turquoise_rgb"],
         "{{C_SEA_RGB}}": theme["sea_rgb"],
+        "{{C_DARK_BG}}": theme["dark_bg"], "{{C_DARK_FG}}": theme["dark_fg"],
+        "{{C_DARK_MUTED}}": theme["dark_muted"], "{{C_DARK_FG_RGB}}": theme["dark_fg_rgb"],
+        "{{C_SIDEBAR_BG}}": theme["sidebar_bg"], "{{C_SIDEBAR_INK}}": theme["sidebar_ink"],
+        "{{C_SIDEBAR_INK_RGB}}": theme["sidebar_ink_rgb"],
 
         "{{LOCATIONS_JSON}}": _json_block(spec.get("locations") or {}),
         "{{PHOTOS_JSON}}": _json_block(spec.get("photos") or {}),

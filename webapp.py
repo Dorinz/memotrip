@@ -23,18 +23,24 @@ except Exception:
 import json
 import os
 import pathlib
+import re
+import secrets
+import shutil
 import sqlite3
 import threading
 import time
 import traceback
+import urllib.parse
 import uuid
 
 import html as _html
 
+import bcrypt
 import uvicorn
-from fastapi import FastAPI, Form, UploadFile
+from fastapi import FastAPI, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.sessions import SessionMiddleware
 
 import build_trip
 import parse_docs
@@ -50,8 +56,16 @@ TEMPLATE = (ROOT / "trip_template.html").read_text(encoding="utf-8")
 MODEL = os.environ.get("TRIP_MODEL", "gemini-3.6-flash")
 DATA.mkdir(exist_ok=True)
 
-app = FastAPI(title="Trip Journal")
+app = FastAPI(title="MemoTrip")
 app.mount("/data", StaticFiles(directory=str(DATA)), name="data")
+
+# session cookie signing key - generated once, persisted locally (gitignored)
+# so logins survive a restart; SESSION_SECRET in .env overrides it if set.
+_secret_path = ROOT / "session_secret.txt"
+if not _secret_path.exists():
+    _secret_path.write_text(secrets.token_hex(32), encoding="utf-8")
+SESSION_SECRET = os.environ.get("SESSION_SECRET") or _secret_path.read_text(encoding="utf-8").strip()
+app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET, same_site="lax")
 
 TPLDIR = ROOT / "webapp_templates"
 
@@ -76,6 +90,19 @@ with db() as _c:
         id TEXT PRIMARY KEY, created TEXT, description TEXT, region_hint TEXT,
         status TEXT, stage TEXT, log TEXT, error TEXT,
         picker_uri TEXT, picker_sid TEXT)""")
+    # user_id: nullable - a guest's trip has none, and is never listed under any account
+    _cols = {r["name"] for r in _c.execute("PRAGMA table_info(trips)")}
+    if "user_id" not in _cols:
+        _c.execute("ALTER TABLE trips ADD COLUMN user_id INTEGER")
+    _c.execute("""CREATE TABLE IF NOT EXISTS users(
+        id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL, display_name TEXT, created TEXT)""")
+    _ucols = {r["name"] for r in _c.execute("PRAGMA table_info(users)")}
+    if "email" not in _ucols and "username" in _ucols:
+        _c.execute("ALTER TABLE users RENAME COLUMN username TO email")
+        _ucols.discard("username"); _ucols.add("email")
+    if "display_name" not in _ucols:
+        _c.execute("ALTER TABLE users ADD COLUMN display_name TEXT")
 
 
 def trip_dir(tid: str) -> pathlib.Path:
@@ -85,6 +112,37 @@ def trip_dir(tid: str) -> pathlib.Path:
 def get_trip(tid: str):
     with db() as c:
         return c.execute("SELECT * FROM trips WHERE id=?", (tid,)).fetchone()
+
+
+# ----------------------------------------------------------------------- auth
+
+def hash_password(pw: str) -> str:
+    return bcrypt.hashpw(pw.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
+def verify_password(pw: str, hashed: str) -> bool:
+    try:
+        return bcrypt.checkpw(pw.encode("utf-8"), hashed.encode("utf-8"))
+    except Exception:
+        return False
+
+
+def get_user_by_email(email: str):
+    with db() as c:
+        return c.execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
+
+
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def get_user(uid: int):
+    with db() as c:
+        return c.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
+
+
+def current_user(request: Request):
+    uid = request.session.get("user_id")
+    return get_user(uid) if uid else None
 
 
 def update(tid: str, **fields):
@@ -117,12 +175,12 @@ def run_build(tid: str):
         hint = row["region_hint"] or ""
         key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
 
-        update(tid, status="running", stage="reading documents", error=None)
+        update(tid, status="running", stage="קורא את המסמכים", error=None)
         text, files = _docs_text(tid)
         logline(tid, f"read {len(files)} document(s), {len(text)} chars")
         source = text + ("\n\n" + desc if desc else "")
 
-        update(tid, stage="parsing itinerary")
+        update(tid, stage="מנתח את המסלול")
         rx = parse_docs.parse_docx_regex(source)
         ai = parse_docs.parse_ai(source, MODEL, log=lambda m: logline(tid, m)) if key else None
         logline(tid, f"regex: {len(rx['flights'])}f/{len(rx['ferries'])}fe/{len(rx['stays'])}s"
@@ -135,7 +193,7 @@ def run_build(tid: str):
                 spec.setdefault("photos", {}).setdefault(it["key"], {"lodging": [], "trip": []})
         spec = parse_docs.expand_days(spec)          # one section per calendar day
         if not spec.get("timeline"):
-            raise RuntimeError("no itinerary found — add more detail to the description or docs")
+            raise RuntimeError("יצירת הדף נכשלה 😔 נסה שוב.")
 
         # one color theme per trip, generated once and kept across rebuilds (e.g. adding photos)
         old_spec_path = trip_dir(tid) / "spec.json"
@@ -148,7 +206,7 @@ def run_build(tid: str):
             spec["theme"] = palette.generate_palette(tid)
             logline(tid, f"color theme: accent {spec['theme']['turquoise']} / {spec['theme']['sea']}")
 
-        update(tid, stage="finding the places on the map")
+        update(tid, stage="שולף מיקומים ומפות")
         unresolved = parse_docs.fill_coords(spec, hint, MODEL, ROOT / "geocode_cache.json",
                                             log=lambda m: logline(tid, m))
         if unresolved:
@@ -156,7 +214,7 @@ def run_build(tid: str):
             logline(tid, "! unresolved places: " + ", ".join(unresolved))
 
         if key:
-            update(tid, stage="writing the story")
+            update(tid, stage="כותב את סיפור המסע")
             try:
                 gen_copy.generate_copy(spec, desc or "", text, model=MODEL,
                                        log=lambda m: logline(tid, m))
@@ -165,77 +223,244 @@ def run_build(tid: str):
         else:
             logline(tid, "no GEMINI_API_KEY — page will have minimal text")
 
-        update(tid, stage="building the page")
+        # a rerun rebuilds the spec from scratch (fresh parse of the docs/description),
+        # which has no memory of photos picked on an earlier run - but the actual
+        # downloaded photos are still sitting in gphotos/ from that earlier pick, so
+        # re-select from them now instead of making the user go back to Google Photos
+        if (trip_dir(tid) / "gphotos" / "manifest.json").is_file():
+            update(tid, stage="בוחר את התמונות הכי טובות")
+            _select_from_local_photos(tid, spec)
+
+        update(tid, stage="בונה את דף המסע")
         (trip_dir(tid) / "spec.json").write_bytes(
             (json.dumps(spec, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
         html = build_trip.build(spec, TEMPLATE)
         (trip_dir(tid) / "page.html").write_bytes(html.replace("\r\n", "\n").encode("utf-8"))
 
         warn = "\n".join(spec.get("_warnings", [])) or None
-        update(tid, status="ready", stage="done", error=warn)
-        logline(tid, "page built" + (" (with warnings)" if warn else ""))
+        if warn:
+            logline(tid, "note: " + warn)
+        logline(tid, "page built")
+
+        # if photo access was already connected on the landing page, try to pick it
+        # up right away (short wait - this must never fail the whole trip); if the
+        # pick isn't finished yet, the page still goes "ready" and the trip page's
+        # own "add photos" button covers finishing it later.
+        row2 = get_trip(tid)
+        if row2 and row2["picker_sid"]:
+            update(tid, stage="ממתין לבחירת התמונות")
+            try:
+                http = fetch_photos.authorise(ROOT / "credentials.json", ROOT / "token.json")
+                if _wait_for_pick(row2["picker_sid"], http, 90):
+                    _download_and_select(tid, http, row2["picker_sid"])
+                    update(tid, status="ready", stage="הושלם", error=None, picker_uri=None, picker_sid=None)
+                else:
+                    logline(tid, "still waiting on your Google Photos pick - the page is ready; "
+                                 "use \"add photos\" on it once you're done picking")
+                    update(tid, status="ready", stage="הושלם", error=warn)
+            except Exception as e:
+                logline(tid, f"photo step skipped: {e}")
+                update(tid, status="ready", stage="הושלם", error=warn)
+        else:
+            update(tid, status="ready", stage="הושלם", error=warn)
     except Exception as e:
-        logline(tid, "ERROR: " + str(e))
-        update(tid, status="error", error=str(e) + "\n" + traceback.format_exc())
+        # the full traceback goes to the log (console + DB) for debugging; the
+        # user-facing error banner only ever shows the short message itself
+        logline(tid, "ERROR: " + str(e) + "\n" + traceback.format_exc())
+        update(tid, status="error", error=str(e))
+
+
+def _wait_for_pick(sid: str, http, timeout_s: float) -> bool:
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        if fetch_photos.session_ready(http, sid):
+            return True
+        time.sleep(2)
+    return False
+
+
+def _select_from_local_photos(tid: str, spec: dict) -> None:
+    """(Re-)run photo selection against whatever's already downloaded in
+    gphotos/ - shared by the first download and every later rerun, so the
+    user is never sent back to the Google Photos picker just to rebuild."""
+    key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    gdir = trip_dir(tid) / "gphotos"
+    photos = select_photos.load_photos("picker", manifest=gdir / "manifest.json", media_dir=gdir)
+    select_photos.select(photos, spec, trip_dir(tid) / "images" / "trips",
+                         use_ai=bool(key), model=MODEL, log=lambda m: logline(tid, m))
+
+
+def _download_and_select(tid: str, http, sid: str):
+    update(tid, stage="מוריד את התמונות")
+    gdir = trip_dir(tid) / "gphotos"
+    manifest = fetch_photos.collect(http, sid, gdir, 1600)
+    logline(tid, f"downloaded {len(manifest)} photo(s)")
+
+    update(tid, stage="בוחר את התמונות הכי טובות")
+    spec = json.loads((trip_dir(tid) / "spec.json").read_text(encoding="utf-8"))
+    _select_from_local_photos(tid, spec)
+
+    (trip_dir(tid) / "spec.json").write_bytes(
+        (json.dumps(spec, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
+    html = build_trip.build(spec, TEMPLATE)
+    (trip_dir(tid) / "page.html").write_bytes(html.replace("\r\n", "\n").encode("utf-8"))
+    n = sum(len(v.get("trip", [])) for v in spec.get("photos", {}).values())
+    n += sum(len(it.get("tripPhotos", [])) for it in spec.get("timeline", []) if it.get("type") == "day")
+    logline(tid, f"page rebuilt with {n} photo(s)")
 
 
 def run_photos(tid: str):
+    """The trip page's manual 'add photos' button - the user is actively watching,
+    so it's fine to wait longer and fail the trip if the pick never completes."""
     try:
-        key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
         sid = get_trip(tid)["picker_sid"]
-        update(tid, status="running", stage="waiting for your photo picks", error=None)
+        update(tid, status="running", stage="ממתין לבחירת התמונות", error=None)
         http = fetch_photos.authorise(ROOT / "credentials.json", ROOT / "token.json")
-        for _ in range(400):                       # ~10 min
-            if fetch_photos.session_ready(http, sid):
-                break
-            time.sleep(2)
-        else:
-            raise RuntimeError("timed out waiting for the picker")
-
-        update(tid, stage="downloading photos")
-        gdir = trip_dir(tid) / "gphotos"
-        manifest = fetch_photos.collect(http, sid, gdir, 1600)
-        logline(tid, f"downloaded {len(manifest)} photo(s)")
-
-        update(tid, stage="choosing the best shots")
-        spec = json.loads((trip_dir(tid) / "spec.json").read_text(encoding="utf-8"))
-        photos = select_photos.load_photos("picker", manifest=gdir / "manifest.json", media_dir=gdir)
-        select_photos.select(photos, spec, trip_dir(tid) / "images" / "trips",
-                             use_ai=bool(key), model=MODEL, log=lambda m: logline(tid, m))
-
-        (trip_dir(tid) / "spec.json").write_bytes(
-            (json.dumps(spec, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
-        html = build_trip.build(spec, TEMPLATE)
-        (trip_dir(tid) / "page.html").write_bytes(html.replace("\r\n", "\n").encode("utf-8"))
-        n = sum(len(v.get("trip", [])) for v in spec.get("photos", {}).values())
-        n += sum(len(it.get("tripPhotos", [])) for it in spec.get("timeline", []) if it.get("type") == "day")
-        update(tid, status="ready", stage="done", picker_uri=None, picker_sid=None)
-        logline(tid, f"page rebuilt with {n} photo(s)")
+        if not _wait_for_pick(sid, http, 600):
+            raise RuntimeError("פג הזמן להמתנה לבחירת התמונות ב-Google Photos")
+        _download_and_select(tid, http, sid)
+        update(tid, status="ready", stage="הושלם", picker_uri=None, picker_sid=None)
     except Exception as e:
-        logline(tid, "ERROR: " + str(e))
-        update(tid, status="error", error=str(e) + "\n" + traceback.format_exc())
+        # the full traceback goes to the log (console + DB) for debugging; the
+        # user-facing error banner only ever shows the short message itself
+        logline(tid, "ERROR: " + str(e) + "\n" + traceback.format_exc())
+        update(tid, status="error", error=str(e))
 
 
 # --------------------------------------------------------------------- routes
 
+STATUS_LABELS = {"queued": "בתור", "running": "מעבד...", "ready": "מוכן", "error": "שגיאה"}
+
+
+def trip_title(tid: str, row) -> str:
+    """'YYYY-MM Region' (e.g. "2026-08 האיים האזוריים") once the trip has a
+    built spec with a month + region; before that (still queued/running, or an
+    older/failed build missing those fields) falls back to the DB row's own
+    creation month + the free-text description, so the list is never blank."""
+    spec_path = trip_dir(tid) / "spec.json"
+    month, region = "", ""
+    if spec_path.is_file():
+        try:
+            spec = json.loads(spec_path.read_text(encoding="utf-8"))
+            month = ((spec.get("meta") or {}).get("start_date") or "")[:7]
+            region = (spec.get("hero") or {}).get("region") or ""
+        except Exception:
+            pass
+    if not month:
+        month = (row["created"] or "")[:7]
+    if region:
+        return f"{month} {region}"
+    return (row["description"] or "(ללא תיאור)")[:70]
+
+
 @app.get("/", response_class=HTMLResponse)
-def index():
-    with db() as c:
-        rows = c.execute("SELECT id, created, status, description FROM trips ORDER BY created DESC").fetchall()
-    if rows:
-        items = "".join(
-            f'<li><a href="/trips/{r["id"]}">'
-            f'{_html.escape((r["description"] or "(ללא תיאור)")[:70])}</a>'
-            f'<span class="s"> · {r["created"]} · {r["status"]}</span></li>' for r in rows)
-        trips_html = f'<h2>טיולים קודמים</h2><ul>{items}</ul>'
+def index(request: Request):
+    user = current_user(request)
+    if user:
+        with db() as c:
+            rows = c.execute("SELECT id, created, status, description FROM trips "
+                              "WHERE user_id=? ORDER BY created DESC", (user["id"],)).fetchall()
+        cards = "".join(
+            f'<div class="trip-card">'
+            f'<a class="t-link" href="/trips/{r["id"]}">'
+            f'<div class="t"><div class="desc">{_html.escape(trip_title(r["id"], r))}</div>'
+            f'<div class="date mono">{r["created"]}</div></div>'
+            f'<span class="pill {r["status"]}">{STATUS_LABELS.get(r["status"], r["status"])}</span>'
+            f'</a>'
+            f'<button type="button" class="del-btn" data-tid="{r["id"]}" '
+            f'title="מחיקת הטיול" aria-label="מחיקת הטיול">🗑</button>'
+            f'</div>' for r in rows)
+        trips_html = (f'<div class="trips" id="trips"><h2>הטיולים שלך</h2>'
+                       + (cards or '<p class="hint">עדיין אין טיולים - תיצור/י אחד למטה.</p>') + '</div>')
+        display = user["display_name"] or user["email"]
+        initial = display.strip()[:1].upper() if display.strip() else "?"
+        account_html = (
+            f'<div class="account-corner" title="{_html.escape(display)}">'
+            f'<button type="button" class="avatar" id="avatarBtn" aria-haspopup="true" '
+            f'aria-expanded="false">{_html.escape(initial)}</button>'
+            f'<div class="account-menu" id="accountMenu" hidden>'
+            f'<a href="#trips" class="menu-item" id="myTripsLink">הטיולים שלי</a>'
+            f'<button type="button" class="menu-item logout" id="logoutBtn">התנתקות</button>'
+            f'</div></div>')
     else:
         trips_html = ""
-    return render("index.html", TRIPS=trips_html)
+        account_html = (
+            '<div class="auth-corner">'
+            '<a href="/login" class="auth-pill">התחברות/הרשמה</a>'
+            '<div class="guest-hint">בשימוש כאורח - הטיול לא יישמר לחשבון</div>'
+            '</div>')
+    return render("index.html", TRIPS=trips_html, ACCOUNT=account_html)
+
+
+@app.get("/login", response_class=HTMLResponse)
+def login_page(request: Request, signup: str = "", error: str = ""):
+    if current_user(request):
+        return RedirectResponse("/", status_code=303)
+    is_signup = bool(signup)
+    return render(
+        "login.html",
+        TAB_LOGIN_CLASS=("" if is_signup else "active"),
+        TAB_SIGNUP_CLASS=("active" if is_signup else ""),
+        FORM_ACTION=("/signup" if is_signup else "/login"),
+        PW_AUTOCOMPLETE=("new-password" if is_signup else "current-password"),
+        PW_HINT=('<div class="hint-small">לפחות 6 תווים.</div>' if is_signup else ""),
+        NAME_FIELD=('<label>שם / כינוי</label>'
+                    '<input type="text" name="name" required autocomplete="nickname">'
+                    if is_signup else ""),
+        SUBMIT_LABEL=("יצירת חשבון" if is_signup else "התחברות"),
+        ERROR=(f'<div class="err-banner show">{_html.escape(error)}</div>' if error else ""))
+
+
+@app.post("/login")
+def login_submit(request: Request, email: str = Form(...), password: str = Form(...)):
+    u = get_user_by_email(email.strip().lower())
+    if not u or not verify_password(password, u["password_hash"]):
+        return RedirectResponse(
+            "/login?error=" + urllib.parse.quote("אימייל או סיסמה שגויים."), status_code=303)
+    request.session["user_id"] = u["id"]
+    return RedirectResponse("/", status_code=303)
+
+
+@app.post("/signup")
+def signup_submit(request: Request, email: str = Form(...), password: str = Form(...),
+                  name: str = Form("")):
+    email = email.strip().lower()
+    name = name.strip()
+    if not EMAIL_RE.match(email) or len(password) < 6 or not name:
+        return RedirectResponse(
+            "/login?signup=1&error=" + urllib.parse.quote("שם, אימייל תקין, וסיסמה (6+ תווים)."),
+            status_code=303)
+    if get_user_by_email(email):
+        return RedirectResponse(
+            "/login?signup=1&error=" + urllib.parse.quote("כבר יש חשבון עם האימייל הזה."), status_code=303)
+    with db() as c:
+        c.execute("INSERT INTO users(email, password_hash, display_name, created) VALUES(?,?,?,?)",
+                  (email, hash_password(password), name, time.strftime("%Y-%m-%d %H:%M")))
+    request.session["user_id"] = get_user_by_email(email)["id"]
+    return RedirectResponse("/", status_code=303)
+
+
+@app.post("/logout")
+def logout(request: Request):
+    request.session.clear()
+    return RedirectResponse("/", status_code=303)
+
+
+@app.post("/photos/session")
+def photos_session():
+    """Open a Google Photos picker session ahead of trip creation, so the user
+    can grant access / start picking right from the landing page. Not tied to
+    any trip yet - the returned sid rides along with the /trips form post."""
+    try:
+        http, session = fetch_photos.open_session(ROOT / "credentials.json", ROOT / "token.json")
+        return {"picker_uri": session["pickerUri"], "sid": session["id"]}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 
 @app.post("/trips")
-async def create(description: str = Form(""), region_hint: str = Form(""),
-                 docs: list[UploadFile] = None):
+async def create(request: Request, description: str = Form(""), region_hint: str = Form(""),
+                 picker_sid: str = Form(""), docs: list[UploadFile] = None):
     tid = uuid.uuid4().hex
     d = trip_dir(tid)
     (d / "docs").mkdir(parents=True, exist_ok=True)
@@ -247,11 +472,12 @@ async def create(description: str = Form(""), region_hint: str = Form(""),
             saved += 1
     if not description.strip() and not saved:
         return JSONResponse({"error": "add a description or at least one document"}, status_code=400)
+    user = current_user(request)                     # None for a guest - trip stays unowned
     with db() as c:
-        c.execute("INSERT INTO trips(id, created, description, region_hint, status, stage, log) "
-                  "VALUES(?,?,?,?,?,?,?)",
+        c.execute("INSERT INTO trips(id, created, description, region_hint, status, stage, log, "
+                  "picker_sid, user_id) VALUES(?,?,?,?,?,?,?,?,?)",
                   (tid, time.strftime("%Y-%m-%d %H:%M"), description, region_hint,
-                   "queued", "queued", ""))
+                   "queued", "queued", "", picker_sid or None, user["id"] if user else None))
     threading.Thread(target=run_build, args=(tid,), daemon=True).start()
     return RedirectResponse(f"/trips/{tid}", status_code=303)
 
@@ -293,6 +519,34 @@ def photos_finish(tid: str):
 def rerun(tid: str):
     threading.Thread(target=run_build, args=(tid,), daemon=True).start()
     return RedirectResponse(f"/trips/{tid}", status_code=303)
+
+
+@app.post("/trips/{tid}/delete")
+def delete_trip(request: Request, tid: str):
+    """Permanently remove a trip: the DB row (so it's gone from "my trips")
+    and its whole webapp_data/<tid>/ folder (spec, photos, docs, page.html)."""
+    row = get_trip(tid)
+    if not row:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    user = current_user(request)
+    if not user or row["user_id"] != user["id"]:
+        return JSONResponse({"error": "not allowed"}, status_code=403)
+
+    with db() as c:
+        c.execute("DELETE FROM trips WHERE id=?", (tid,))
+
+    # tid matched a real row fetched above, but a filesystem-wide delete still
+    # gets an explicit guard on principle (see: the empty-tid rmtree incident in
+    # BUILD_README/session notes) - never rmtree a path built from an unverified value
+    assert tid and len(tid) >= 8, "refusing to remove an unexpected trip_dir path"
+    d = trip_dir(tid)
+    try:
+        if d.is_dir():
+            shutil.rmtree(d)
+    except Exception as e:
+        print(f"[{tid[:8]}] warning: trip row deleted but folder cleanup failed: {e}")
+
+    return {"ok": True}
 
 
 @app.post("/trips/{tid}/theme/reroll")
