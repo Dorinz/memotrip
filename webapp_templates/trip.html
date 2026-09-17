@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>MemoTrip — {{TID8}}</title>
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Secular+One&family=Assistant:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -240,17 +241,52 @@ $("pickModalClose").onclick = closePickModal;
 pickModal.addEventListener('click', (e) => { if(e.target === pickModal) closePickModal(); });
 document.addEventListener('keydown', (e) => { if(e.key === 'Escape' && !pickModal.hidden) closePickModal(); });
 
-$("addphotos").onclick = async () => {
+// one click opens one popup, synchronously (required to dodge the browser's
+// popup blocker). That same popup then walks - on its own - through Google's
+// consent screen (if needed) and our bridge page straight to the real picker
+// (see _photos_bridge_page in webapp.py). This tab never navigates; it just
+// listens for that popup to report "connected" via postMessage, so the modal
+// opens without a second click. pickerlink stays as a manual fallback in
+// case the popup got blocked or something else went wrong.
+window.addEventListener('message', (ev) => {
+  if (ev.origin !== window.location.origin) return;
+  if (ev.data && ev.data.type === 'memotrip_photos_ready') {
+    $("addphotos").disabled = false;
+    pickModal.hidden = false;
+  }
+});
+
+async function startAddPhotos(){
+  const popup = window.open('', '_blank');   // must be synchronous, right here - see comment above
   $("addphotos").disabled = true;
   const r = await fetch(`/trips/${TID}/photos/start`, {method:"POST"});
   const j = await r.json();
   if(j.error){
-    if(j.connect_url || j.login_url){ window.location.href = j.connect_url || j.login_url; return; }
+    if(j.connect_url || j.login_url){
+      const url = j.connect_url || j.login_url;
+      if(popup){ popup.location = url; } else { window.location.href = url; }
+      return;   // message listener re-enables the button and opens the modal once the popup finishes
+    }
+    if(popup) popup.close();
     alert(j.error); $("addphotos").disabled=false; return;
   }
   $("pickerlink").href = j.picker_uri;
+  if(popup){ popup.location = j.picker_uri; }
   pickModal.hidden = false;
-};
+}
+$("addphotos").onclick = startAddPhotos;
+
+// fallback only: reached if the callback's own attempt to open a session
+// right after connecting somehow failed and fell back to redirecting here
+// instead of straight to the picker (see webapp.py's oauth_photos_callback).
+if(new URLSearchParams(location.search).get("resume_photos") === "1"){
+  history.replaceState(null, "", location.pathname);
+  (async () => {
+    const r = await fetch(`/trips/${TID}/photos/start`, {method:"POST"});
+    const j = await r.json();
+    if(!j.error){ $("pickerlink").href = j.picker_uri; pickModal.hidden = false; }
+  })();
+}
 $("reroll").onclick = async () => {
   $("reroll").disabled = true;
   const r = await fetch(`/trips/${TID}/theme/reroll`, {method:"POST"});

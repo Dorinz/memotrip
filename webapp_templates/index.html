@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>MemoTrip — יומן מסע בקליק</title>
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Secular+One&family=Assistant:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -551,6 +552,8 @@
     </div>
   </main>
 
+  <footer><a href="/privacy">מדיניות פרטיות</a> · <a href="/terms">תנאי שימוש</a></footer>
+
   <div class="modal-overlay" id="deleteModal" hidden>
     <div class="modal-box">
       <p>למחוק את הטיול הזה לצמיתות?</p>
@@ -648,7 +651,7 @@
       if(list && !list.querySelector('.trip-card')){
         const empty = document.createElement('p');
         empty.className = 'hint';
-        empty.textContent = 'עדיין אין טיולים - תיצור/י אחד למטה.';
+        empty.textContent = 'דפי הטיולים שלכם יופיעו כאן אחרי שתצרו אותם.';
         list.appendChild(empty);
       }
     } catch(err) {
@@ -676,10 +679,24 @@
   const photosHint = document.getElementById('photosHint');
   const pickerSidInput = document.getElementById('pickerSidInput');
 
-  // must be called synchronously inside the real click handler that triggers it -
-  // a browser only allows window.open() without blocking it as a popup while
-  // still part of the direct user gesture; awaiting a fetch first breaks that.
-  function openBlankTab(){ return window.open('', '_blank'); }
+  // One click opens one popup, synchronously (required to dodge the browser's
+  // popup blocker - it only allows window.open() called directly inside a
+  // click, before any await). That SAME popup then travels, on its own,
+  // through Google's consent screen (if needed) and our own bridge page
+  // straight to Google's real picker - see _photos_bridge_page in webapp.py.
+  // This tab never navigates; it just listens for that popup to report
+  // "connected" via postMessage, so it can flip into picking mode without
+  // the user ever clicking a second time.
+  window.addEventListener('message', (ev) => {
+    if (ev.origin !== window.location.origin) return;
+    if (ev.data && ev.data.type === 'memotrip_photos_ready') {
+      pickerSidInput.value = ev.data.sid;
+      connectBtn.disabled = false;
+      connectBtn.querySelector('.txt').textContent = 'חברו אלבום מ-Google Photos';
+      photosHint.textContent = 'סמנו שם את התמונות ולחצו Done, ואז חוזרים לכאן ולוחצים "סיימתי לבחור".';
+      showPickingState();
+    }
+  });
 
   async function startPickerSession(popup){
     try {
@@ -687,16 +704,16 @@
       const j = await r.json();
       if(j.error){
         if(j.connect_url || j.login_url){
-          if(popup) popup.close();
-          window.location.href = j.connect_url || j.login_url;
-          return null;
+          const url = j.connect_url || j.login_url;
+          if(popup){ popup.location = url; } else { window.location.href = url; }
+          return 'pending';   // not connected yet - the message listener above finishes the job once the popup reports back
         }
         if(popup) popup.close();
         photosHint.textContent = 'לא הצלחנו להתחבר ל-Google Photos: ' + j.error;
         return null;
       }
       pickerSidInput.value = j.sid;
-      if(popup && !popup.closed){
+      if(popup){
         popup.location = j.picker_uri;
         photosHint.textContent = 'סמנו שם את התמונות ולחצו Done, ואז חוזרים לכאן ולוחצים "סיימתי לבחור".';
       } else {
@@ -718,9 +735,7 @@
     photosStatus.innerHTML =
       '<button type="button" class="btn ghost" id="reselectPhotos">בחר מחדש</button>' +
       '<button type="button" class="btn" id="donePickingPhotos">✓ סיימתי לבחור</button>';
-    document.getElementById('reselectPhotos').onclick = async () => {
-      await startPickerSession(openBlankTab());
-    };
+    document.getElementById('reselectPhotos').onclick = () => startPickerSession(window.open('', '_blank'));
     document.getElementById('donePickingPhotos').onclick = showConfirmedState;
   }
 
@@ -730,16 +745,17 @@
       '<button type="button" class="link-btn" id="changePhotos">בחירה מחדש</button>';
     photosHint.textContent = 'אפשר לשנות את הבחירה בכל שלב לפני השליחה.';
     document.getElementById('changePhotos').onclick = async () => {
-      const j = await startPickerSession(openBlankTab());
-      if(j) showPickingState();
+      const j = await startPickerSession(window.open('', '_blank'));
+      if(j && j !== 'pending') showPickingState();
     };
   }
 
   connectBtn.onclick = async () => {
-    const popup = openBlankTab();
+    const popup = window.open('', '_blank');  // must be synchronous, right here - see comment above
     connectBtn.disabled = true;
-    connectBtn.querySelector('.txt').textContent = 'פותח את גוגל...';
+    connectBtn.querySelector('.txt').textContent = 'פותח...';
     const j = await startPickerSession(popup);
+    if(j === 'pending') return;   // message listener re-enables the button and continues once the popup finishes
     connectBtn.disabled = false;
     connectBtn.querySelector('.txt').textContent = 'חברו אלבום מ-Google Photos';
     if(j) showPickingState();

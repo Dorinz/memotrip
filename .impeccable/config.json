@@ -38,6 +38,15 @@
         ],
         "createdAt": "2026-09-16T14:33:13.342Z",
         "reason": "pre-existing .bar>i progress-fill width transition (predates this session's changes, which only touched the iframe/preview-wrap section) - a small isolated 8px-tall progress bar, and the transition IS its function (smooth progress updates), same exception category already recorded for #rail-fill elsewhere"
+      },
+      {
+        "rule": "ai-color-palette",
+        "value": "*",
+        "files": [
+          "webapp_templates/login.html"
+        ],
+        "createdAt": "2026-09-17T22:41:42.674Z",
+        "reason": "pre-existing site-wide brand palette (--pal-0..9 purple/cyan), used identically across index.html, trip.html, trip_template.html; not introduced this session, not a demo/fixture"
       }
     ]
   }

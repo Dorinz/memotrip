@@ -58,6 +58,7 @@ DATA.mkdir(exist_ok=True)
 
 app = FastAPI(title="MemoTrip")
 app.mount("/data", StaticFiles(directory=str(DATA)), name="data")
+app.mount("/static", StaticFiles(directory=str(ROOT / "static")), name="static")
 
 # session cookie signing key - generated once, persisted locally (gitignored)
 # so logins survive a restart; SESSION_SECRET in .env overrides it if set.
@@ -129,6 +130,23 @@ def get_user(uid: int):
 def current_user(request: Request):
     uid = request.session.get("user_id")
     return get_user(uid) if uid else None
+
+
+def photo_owner_key(request: Request) -> str:
+    """Stable identity to key a Google Photos connection by: "user:<id>" for
+    a logged-in account, or "guest:<random>" for an anonymous session (the
+    random id is created once and stashed in the session cookie so it stays
+    stable across requests). This exists so a guest can connect their own
+    Google Photos without ever creating a MemoTrip account - the login/signup
+    flow and this are deliberately independent."""
+    user = current_user(request)
+    if user:
+        return f"user:{user['id']}"
+    gid = request.session.get("guest_id")
+    if not gid:
+        gid = secrets.token_urlsafe(16)
+        request.session["guest_id"] = gid
+    return f"guest:{gid}"
 
 
 def update(tid: str, **fields):
@@ -236,7 +254,7 @@ def run_build(tid: str):
         if row2 and row2["picker_sid"]:
             update(tid, stage="ממתין לבחירת התמונות")
             try:
-                http = fetch_photos.authorise_for_user(row2["user_id"], config.OAUTH_WEB_CLIENT_PATH)
+                http = fetch_photos.authorise_for_user(row2["photo_owner_key"], config.OAUTH_WEB_CLIENT_PATH)
                 if _wait_for_pick(row2["picker_sid"], http, 90):
                     _download_and_select(tid, http, row2["picker_sid"])
                     update(tid, status="ready", stage="הושלם", error=None, picker_uri=None, picker_sid=None)
@@ -302,7 +320,7 @@ def run_photos(tid: str):
         row = get_trip(tid)
         sid = row["picker_sid"]
         update(tid, status="running", stage="ממתין לבחירת התמונות", error=None)
-        http = fetch_photos.authorise_for_user(row["user_id"], config.OAUTH_WEB_CLIENT_PATH)
+        http = fetch_photos.authorise_for_user(row["photo_owner_key"], config.OAUTH_WEB_CLIENT_PATH)
         if not _wait_for_pick(sid, http, 600):
             raise RuntimeError("פג הזמן להמתנה לבחירת התמונות ב-Google Photos")
         _download_and_select(tid, http, sid)
@@ -358,7 +376,7 @@ def index(request: Request):
             f'title="מחיקת הטיול" aria-label="מחיקת הטיול">🗑</button>'
             f'</div>' for r in rows)
         trips_html = (f'<div class="trips" id="trips"><h2>הטיולים שלך</h2>'
-                       + (cards or '<p class="hint">עדיין אין טיולים - תיצור/י אחד למטה.</p>') + '</div>')
+                       + (cards or '<p class="hint">דפי הטיולים שלכם יופיעו כאן אחרי שתצרו אותם.</p>') + '</div>')
         display = user["display_name"] or user["email"]
         initial = display.strip()[:1].upper() if display.strip() else "?"
         account_html = (
@@ -377,6 +395,16 @@ def index(request: Request):
             '<div class="guest-hint">בשימוש כאורח - הטיול לא יישמר לחשבון</div>'
             '</div>')
     return render("index.html", TRIPS=trips_html, ACCOUNT=account_html)
+
+
+@app.get("/privacy", response_class=HTMLResponse)
+def privacy_page():
+    return render("privacy.html", UPDATED=time.strftime("%Y-%m-%d"))
+
+
+@app.get("/terms", response_class=HTMLResponse)
+def terms_page():
+    return render("terms.html", UPDATED=time.strftime("%Y-%m-%d"))
 
 
 @app.get("/login", response_class=HTMLResponse)
@@ -433,11 +461,36 @@ def logout(request: Request):
     return RedirectResponse("/", status_code=303)
 
 
+def _photos_bridge_page(sid: str, picker_uri: str) -> HTMLResponse:
+    """Tiny transitional page loaded, in the SAME popup window the user's one
+    click opened, right after Google's consent screen sends it back to our
+    callback. It tells the opener tab (the actual site, sitting untouched the
+    whole time) that a real picker session now exists - via postMessage, so
+    that tab can flip into its "picking" UI without the user ever clicking a
+    second time - and then this same popup continues straight on to Google's
+    real picker UI. One click, one window, walking through consent then
+    picker as one continuous trip; the main tab never navigates at all."""
+    payload = json.dumps({"type": "memotrip_photos_ready", "sid": sid})
+    picker_uri_js = json.dumps(picker_uri)
+    html = (f'<!doctype html><meta charset="utf-8">'
+            f'<script>'
+            f'if (window.opener) {{ try {{ window.opener.postMessage({payload}, window.location.origin); }} '
+            f'catch (e) {{}} }}'
+            f'window.location.replace({picker_uri_js});'
+            f'</script>')
+    return HTMLResponse(html)
+
+
 @app.get("/oauth/photos/start")
-def oauth_photos_start(request: Request, next: str = "/"):
-    """Kicks off the per-user Google Photos OAuth flow - each user connects
-    their own Google account (stored in the photo_accounts table), replacing
-    the old shared token.json. Requires login first.
+def oauth_photos_start(request: Request, next: str = "/", tid: str = ""):
+    """Kicks off the Google Photos OAuth flow - each *owner* (a logged-in
+    user or a guest's own anonymous session, see photo_owner_key()) connects
+    their own Google account, stored in the photo_accounts table keyed by
+    that owner_key, replacing the old shared token.json. No login required -
+    a guest never has to create a MemoTrip account just to attach their own
+    photos. tid, when given, is the trip whose picker_uri/picker_sid the
+    callback should update once a fresh session is opened right after
+    connecting.
 
     OPERATOR NOTE: credentials_web.json must be a Web application OAuth
     client in Google Cloud Console (Credentials -> Create credentials ->
@@ -447,9 +500,6 @@ def oauth_photos_start(request: Request, next: str = "/"):
     {PUBLIC_BASE_URL}/oauth/photos/callback registered as Authorized redirect
     URIs. This is a manual Google Cloud Console step; it can't be done from
     code."""
-    user = current_user(request)
-    if not user:
-        return RedirectResponse("/login", status_code=303)
     state = secrets.token_urlsafe(24)
     url, code_verifier = fetch_photos.build_auth_url(
         config.OAUTH_WEB_CLIENT_PATH,
@@ -458,6 +508,8 @@ def oauth_photos_start(request: Request, next: str = "/"):
     request.session["photos_oauth_state"] = state
     request.session["photos_oauth_next"] = next
     request.session["photos_oauth_verifier"] = code_verifier
+    request.session["photos_oauth_tid"] = tid
+    request.session["photos_oauth_owner"] = photo_owner_key(request)
     return RedirectResponse(url, status_code=303)
 
 
@@ -466,18 +518,29 @@ def oauth_photos_callback(request: Request, code: str = "", state: str = ""):
     expected = request.session.pop("photos_oauth_state", None)
     next_url = request.session.pop("photos_oauth_next", "/") or "/"
     verifier = request.session.pop("photos_oauth_verifier", None)
-    user = current_user(request)
-    if not user or not state or not expected or state != expected or not verifier:
-        return RedirectResponse("/login", status_code=303)
+    tid = request.session.pop("photos_oauth_tid", "")
+    owner_key = request.session.pop("photos_oauth_owner", None)
+    if not owner_key or not state or not expected or state != expected or not verifier:
+        return HTMLResponse("Google Photos connection failed: invalid or expired request.", status_code=400)
     try:
         creds = fetch_photos.exchange_code(
             config.OAUTH_WEB_CLIENT_PATH,
             f"{config.PUBLIC_BASE_URL}/oauth/photos/callback",
             code, verifier)
-        fetch_photos.save_user_credentials(user["id"], creds)
+        fetch_photos.save_user_credentials(owner_key, creds)
     except Exception as e:
         return HTMLResponse(f"Google Photos connection failed: {_html.escape(str(e))}", status_code=500)
-    return RedirectResponse(next_url, status_code=303)
+    # continue straight into a real picker session, in this same popup tab -
+    # this is what makes the whole thing a single click for the user (see
+    # _photos_bridge_page). Only fall back to the plain next_url redirect if
+    # opening a session right after connecting somehow fails.
+    try:
+        _, session = fetch_photos.open_session_for_user(owner_key, config.OAUTH_WEB_CLIENT_PATH)
+        if tid:
+            update(tid, picker_uri=session["pickerUri"], picker_sid=session["id"])
+        return _photos_bridge_page(session["id"], session["pickerUri"])
+    except Exception:
+        return RedirectResponse(next_url, status_code=303)
 
 
 @app.post("/photos/session")
@@ -486,19 +549,23 @@ def photos_session(request: Request):
     can grant access / start picking right from the landing page. Not tied to
     any trip yet - the returned sid rides along with the /trips form post.
 
-    Requires a logged-in user with Google Photos already connected (each user
-    authorises their own Google account - see /oauth/photos/start); a guest
-    or an unconnected account gets a JSON error the front end redirects on."""
-    user = current_user(request)
-    if not user:
-        return JSONResponse({"error": "login required", "login_url": "/login"}, status_code=401)
+    No login required - works for a guest just as well as a logged-in user,
+    each keyed by their own photo_owner_key() (see /oauth/photos/start); an
+    unconnected owner gets a JSON error the front end redirects on."""
     try:
-        http, session = fetch_photos.open_session_for_user(user["id"], config.OAUTH_WEB_CLIENT_PATH)
+        http, session = fetch_photos.open_session_for_user(photo_owner_key(request), config.OAUTH_WEB_CLIENT_PATH)
         return {"picker_uri": session["pickerUri"], "sid": session["id"]}
     except fetch_photos.PhotosNotConnected:
+        # resume_photos=1 lets the landing page auto-retry this same action
+        # once the user is back from Google's consent screen, instead of
+        # silently dropping them on a reloaded page with no picker open and
+        # no clue they need to click "connect" a second time.
+        next_url = "/?" + urllib.parse.urlencode({"resume_photos": "1"})
+        connect_url = "/oauth/photos/start?" + urllib.parse.urlencode({"next": next_url})
         return JSONResponse({"error": "connect Google Photos first",
-                              "connect_url": "/oauth/photos/start?next=/"}, status_code=401)
+                              "connect_url": connect_url}, status_code=401)
     except Exception as e:
+        traceback.print_exc()      # otherwise a 500 here leaves zero trace in the logs
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
@@ -517,11 +584,16 @@ async def create(request: Request, description: str = Form(""), region_hint: str
     if not description.strip() and not saved:
         return JSONResponse({"error": "add a description or at least one document"}, status_code=400)
     user = current_user(request)                     # None for a guest - trip stays unowned
+    # photo_owner_key is set for guests too (a stable per-session id, not an
+    # account) - see photo_owner_key() - so run_build/run_photos can look up
+    # this trip's own Google Photos connection later, in a background job
+    # that has no browser session/cookies to derive it from.
     with db() as c:
         c.execute("INSERT INTO trips(id, created, description, region_hint, status, stage, log, "
-                  "picker_sid, user_id) VALUES(?,?,?,?,?,?,?,?,?)",
+                  "picker_sid, user_id, photo_owner_key) VALUES(?,?,?,?,?,?,?,?,?,?)",
                   (tid, time.strftime("%Y-%m-%d %H:%M"), description, region_hint,
-                   "queued", "queued", "", picker_sid or None, user["id"] if user else None))
+                   "queued", "queued", "", picker_sid or None, user["id"] if user else None,
+                   photo_owner_key(request)))
     tasks.enqueue("build", tid)
     return RedirectResponse(f"/trips/{tid}", status_code=303)
 
@@ -543,25 +615,28 @@ def status(tid: str):
 
 @app.post("/trips/{tid}/photos/start")
 def photos_start(tid: str, request: Request):
-    user = current_user(request)
-    if not user:
-        return JSONResponse({"error": "login required", "login_url": "/login"}, status_code=401)
+    owner_key = photo_owner_key(request)
     try:
-        http, session = fetch_photos.open_session_for_user(user["id"], config.OAUTH_WEB_CLIENT_PATH)
+        http, session = fetch_photos.open_session_for_user(owner_key, config.OAUTH_WEB_CLIENT_PATH)
         update(tid, picker_uri=session["pickerUri"], picker_sid=session["id"])
         return {"picker_uri": session["pickerUri"]}
     except fetch_photos.PhotosNotConnected:
+        # tid tells the callback which trip's picker_uri/picker_sid to fill
+        # in once it opens a fresh session right after connecting (see
+        # _photos_bridge_page) - that's what makes this a single click:
+        # consent screen -> straight into the real picker, same popup tab.
+        # next stays only as a fallback for if that immediate re-open fails.
+        next_url = f"/trips/{tid}?" + urllib.parse.urlencode({"resume_photos": "1"})
+        connect_url = "/oauth/photos/start?" + urllib.parse.urlencode({"next": next_url, "tid": tid})
         return JSONResponse({"error": "connect Google Photos first",
-                              "connect_url": f"/oauth/photos/start?next=/trips/{tid}"}, status_code=401)
+                              "connect_url": connect_url}, status_code=401)
     except Exception as e:
+        traceback.print_exc()      # otherwise a 500 here leaves zero trace in the logs
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
 @app.post("/trips/{tid}/photos/finish")
 def photos_finish(tid: str, request: Request):
-    user = current_user(request)
-    if not user:
-        return JSONResponse({"error": "login required", "login_url": "/login"}, status_code=401)
     if not get_trip(tid)["picker_sid"]:
         return JSONResponse({"error": "start the picker first"}, status_code=400)
     tasks.enqueue("photos", tid)

@@ -117,6 +117,8 @@ def _init_schema_sqlite() -> None:
         _cols = {r["name"] for r in _c.execute("PRAGMA table_info(trips)")}
         if "user_id" not in _cols:
             _c.execute("ALTER TABLE trips ADD COLUMN user_id INTEGER")
+        if "photo_owner_key" not in _cols:
+            _c.execute("ALTER TABLE trips ADD COLUMN photo_owner_key TEXT")
         _c.execute("""CREATE TABLE IF NOT EXISTS users(
             id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL, display_name TEXT, created TEXT)""")
@@ -126,14 +128,27 @@ def _init_schema_sqlite() -> None:
             _ucols.discard("username"); _ucols.add("email")
         if "display_name" not in _ucols:
             _c.execute("ALTER TABLE users ADD COLUMN display_name TEXT")
-        # per-user Google Photos OAuth tokens (one connection per user)
+        # Google Photos OAuth tokens, keyed by owner_key - "user:<id>" for a
+        # logged-in account or "guest:<random>" for an anonymous session (see
+        # webapp.photo_owner_key), so a guest can connect their own Google
+        # Photos without ever creating a MemoTrip account. A table from
+        # before this change gets dropped and recreated - it only ever held
+        # reconnectable OAuth tokens, nothing worth migrating.
+        _pcols = {r["name"] for r in _c.execute("PRAGMA table_info(photo_accounts)")}
+        if _pcols and "owner_key" not in _pcols:
+            _c.execute("DROP TABLE photo_accounts")
         _c.execute("""CREATE TABLE IF NOT EXISTS photo_accounts(
-            user_id INTEGER PRIMARY KEY,
+            owner_key TEXT PRIMARY KEY,
             refresh_token TEXT, access_token TEXT, token_expiry TEXT, granted TEXT)""")
 
 
 def _init_schema_pg() -> None:
-    """Clean final schema — prod starts empty, so no migration dance needed."""
+    """Was truly "prod starts empty, no migration dance needed" - no longer
+    quite true now that a live deploy already created an earlier version of
+    photo_accounts (keyed by a plain user_id) before guests needed to use it
+    too. CREATE TABLE IF NOT EXISTS never alters an existing table, so that
+    old copy needs an explicit, one-time drop-and-recreate here - it only
+    ever held reconnectable OAuth tokens, nothing worth a real migration for."""
     with db() as _c:
         _c.execute("""CREATE TABLE IF NOT EXISTS users(
             id SERIAL PRIMARY KEY, email TEXT UNIQUE NOT NULL,
@@ -141,7 +156,14 @@ def _init_schema_pg() -> None:
         _c.execute("""CREATE TABLE IF NOT EXISTS trips(
             id TEXT PRIMARY KEY, created TEXT, description TEXT, region_hint TEXT,
             status TEXT, stage TEXT, log TEXT, error TEXT,
-            picker_uri TEXT, picker_sid TEXT, user_id INTEGER)""")
+            picker_uri TEXT, picker_sid TEXT, user_id INTEGER, photo_owner_key TEXT)""")
+        _c.execute("""ALTER TABLE trips ADD COLUMN IF NOT EXISTS photo_owner_key TEXT""")
+        _pcols = {r["column_name"] for r in _c.execute(
+            "SELECT column_name FROM information_schema.columns WHERE table_name='photo_accounts'").fetchall()}
+        if _pcols and "owner_key" not in _pcols:
+            _c.execute("DROP TABLE photo_accounts")
+        # keyed by owner_key ("user:<id>" or "guest:<random>"), not a plain
+        # user_id FK, so guests can connect Google Photos too - see webapp.photo_owner_key.
         _c.execute("""CREATE TABLE IF NOT EXISTS photo_accounts(
-            user_id INTEGER PRIMARY KEY REFERENCES users(id),
+            owner_key TEXT PRIMARY KEY,
             refresh_token TEXT, access_token TEXT, token_expiry TEXT, granted TEXT)""")

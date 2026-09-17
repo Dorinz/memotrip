@@ -43,6 +43,7 @@ import time
 try:
     from google_auth_oauthlib.flow import InstalledAppFlow, Flow
     from google.auth.transport.requests import AuthorizedSession, Request
+    from google.auth.exceptions import RefreshError
     from google.oauth2.credentials import Credentials
 except ImportError:
     sys.exit("run:  pip install google-auth google-auth-oauthlib requests")
@@ -160,35 +161,39 @@ def _web_client_info(client_secrets_path: pathlib.Path) -> tuple[str, str]:
     return info["client_id"], info["client_secret"]
 
 
-def save_user_credentials(user_id: int, creds: Credentials) -> None:
+def save_user_credentials(owner_key: str, creds: Credentials) -> None:
     """Upsert a photo_accounts row from a fresh Credentials object - call
     right after exchange_code(), and again whenever authorise_for_user()
-    refreshes an expired access token."""
+    refreshes an expired access token. owner_key is "user:<id>" for a
+    logged-in account or "guest:<random>" for an anonymous session (see
+    webapp.photo_owner_key) - not a users.id FK, so a guest can connect their
+    own Google Photos without ever creating a MemoTrip account."""
     import db as _db
     expiry = creds.expiry.isoformat() if creds.expiry else None
     with _db.db() as c:
-        c.execute("""INSERT INTO photo_accounts(user_id, refresh_token, access_token,
+        c.execute("""INSERT INTO photo_accounts(owner_key, refresh_token, access_token,
                      token_expiry, granted) VALUES(?,?,?,?,?)
-                     ON CONFLICT(user_id) DO UPDATE SET
+                     ON CONFLICT(owner_key) DO UPDATE SET
                      refresh_token=excluded.refresh_token,
                      access_token=excluded.access_token,
                      token_expiry=excluded.token_expiry,
                      granted=excluded.granted""",
-                  (user_id, creds.refresh_token, creds.token, expiry,
+                  (owner_key, creds.refresh_token, creds.token, expiry,
                    time.strftime("%Y-%m-%d %H:%M")))
 
 
-def authorise_for_user(user_id, client_secrets_path: pathlib.Path) -> AuthorizedSession:
-    """Loads this user's stored Google Photos tokens, refreshing if expired,
+def authorise_for_user(owner_key: str, client_secrets_path: pathlib.Path) -> AuthorizedSession:
+    """Loads this owner's stored Google Photos tokens, refreshing if expired,
     and returns a ready-to-use AuthorizedSession. Raises PhotosNotConnected
-    if the user has no photo_accounts row yet (this also naturally covers a
-    guest trip, whose user_id is None - "WHERE user_id=NULL" matches no row
-    in either sqlite or Postgres)."""
+    if there's no photo_accounts row yet for this owner_key (this also
+    naturally covers an old guest trip predating per-guest identities, whose
+    photo_owner_key is None - "WHERE owner_key=NULL" matches no row in either
+    sqlite or Postgres)."""
     import db as _db
     with _db.db() as c:
-        row = c.execute("SELECT * FROM photo_accounts WHERE user_id=?", (user_id,)).fetchone()
+        row = c.execute("SELECT * FROM photo_accounts WHERE owner_key=?", (owner_key,)).fetchone()
     if not row or not row["refresh_token"]:
-        raise PhotosNotConnected(f"user {user_id} has not connected Google Photos")
+        raise PhotosNotConnected(f"{owner_key} has not connected Google Photos")
     client_id, client_secret = _web_client_info(client_secrets_path)
     expiry = datetime.datetime.fromisoformat(row["token_expiry"]) if row["token_expiry"] else None
     creds = Credentials(
@@ -197,17 +202,46 @@ def authorise_for_user(user_id, client_secrets_path: pathlib.Path) -> Authorized
         client_id=client_id, client_secret=client_secret, scopes=SCOPES,
         expiry=expiry)
     if not creds.valid:
-        creds.refresh(Request())
-        save_user_credentials(user_id, creds)
+        try:
+            creds.refresh(Request())
+        except RefreshError:
+            # the stored refresh token is dead - either revoked at
+            # myaccount.google.com/permissions, or (very likely while this
+            # app is still unverified with Google) it hit Google's 7-day
+            # refresh-token expiry for apps in "Testing" publishing status.
+            # Either way, drop the stale row and make the caller treat this
+            # exactly like "never connected", so the user is sent back
+            # through /oauth/photos/start for a fresh consent instead of
+            # seeing a raw Google error.
+            import db as _db
+            with _db.db() as c:
+                c.execute("DELETE FROM photo_accounts WHERE owner_key=?", (owner_key,))
+            raise PhotosNotConnected(f"{owner_key}'s Google Photos token was revoked/expired")
+        save_user_credentials(owner_key, creds)
     return AuthorizedSession(creds)
 
 
-def open_session_for_user(user_id, client_secrets_path: pathlib.Path):
-    """-> (AuthorizedSession, session dict with 'id' and 'pickerUri'). Per-user
-    equivalent of open_session() above for the web app - raises
-    PhotosNotConnected if the user hasn't connected Google Photos yet."""
-    http = authorise_for_user(user_id, client_secrets_path)
-    return http, _ok(http.post(f"{BASE}/sessions", json={})).json()
+def open_session_for_user(owner_key: str, client_secrets_path: pathlib.Path):
+    """-> (AuthorizedSession, session dict with 'id' and 'pickerUri'). Per-
+    owner equivalent of open_session() above for the web app - raises
+    PhotosNotConnected if this owner hasn't connected Google Photos yet.
+
+    authorise_for_user() only catches a *dead* refresh token when its own
+    proactive check (creds.valid, based on the locally-stored expiry) already
+    knew a refresh was needed. If the stored token still looks unexpired
+    locally but Google has actually revoked it already, creds.valid is True,
+    authorise_for_user() skips its own refresh, and it's *this* request below
+    that gets a 401 from Google - AuthorizedSession then silently tries its
+    own refresh-and-retry, which raises the exact same RefreshError, just one
+    level down from where the first fix caught it. Wrap this call too."""
+    http = authorise_for_user(owner_key, client_secrets_path)
+    try:
+        return http, _ok(http.post(f"{BASE}/sessions", json={})).json()
+    except RefreshError:
+        import db as _db
+        with _db.db() as c:
+            c.execute("DELETE FROM photo_accounts WHERE owner_key=?", (owner_key,))
+        raise PhotosNotConnected(f"{owner_key}'s Google Photos token was revoked/expired (during use)")
 
 
 def session_ready(http: AuthorizedSession, sid: str) -> bool:

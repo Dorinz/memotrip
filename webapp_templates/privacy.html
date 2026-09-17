@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MemoTrip — מדיניות פרטיות</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Secular+One&family=Assistant:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-0:#F3FBFA; --ink:#123C3D; --ink-dim:#3F6B6C; --muted:#4F7576;
+    --turquoise-deep:#0F687F; --line:rgba(18,60,61,0.14);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg-0); color:var(--ink); font-family:'Assistant', sans-serif;
+    line-height:1.75; padding:40px 20px 80px;
+  }
+  main{ max-width:720px; margin:0 auto; background:#fff; border-radius:20px;
+        padding:40px 36px; box-shadow:0 20px 50px -30px rgba(18,60,61,0.25); }
+  h1{ font-family:'Secular One', sans-serif; font-weight:400; font-size:1.9rem; margin:0 0 6px; }
+  .updated{ color:var(--muted); font-size:0.85rem; margin-bottom:28px; }
+  h2{ font-size:1.15rem; margin:30px 0 10px; color:var(--turquoise-deep); }
+  p, li{ font-size:0.96rem; color:var(--ink); }
+  ul{ padding-inline-start:22px; }
+  a{ color:var(--turquoise-deep); }
+  .back{ display:inline-block; margin-bottom:20px; font-size:0.85rem; color:var(--muted); text-decoration:none; }
+</style>
+</head>
+<body>
+<main>
+  <a class="back" href="/">← חזרה ל-MemoTrip</a>
+  <h1>מדיניות פרטיות — MemoTrip</h1>
+  <p class="updated">עודכן לאחרונה: {{UPDATED}}</p>
+
+  <p>MemoTrip ("האפליקציה") היא כלי ליצירת דף טיול אישי מתיאור טקסטואלי,
+  מסמכי לוגיסטיקה (כרטיסי טיסה/הזמנות), ותמונות. מסמך זה מסביר אילו מידע
+  האפליקציה אוספת, למה, וכיצד הוא נשמר.</p>
+
+  <h2>איזה מידע נאסף</h2>
+  <ul>
+    <li><b>פרטי חשבון</b>: כתובת אימייל, סיסמה (מאוחסנת מוצפנת/מגובבת, לא בטקסט גלוי), ושם תצוגה, אם נרשמת לחשבון.</li>
+    <li><b>תוכן שהעלית</b>: התיאור החופשי שכתבת, מסמכי לוגיסטיקה שהעלית (PDF/DOCX), ותמונות שבחרת עבור הטיול.</li>
+    <li><b>נתוני Google Photos</b>, רק אם בחרת לחבר את חשבון הגוגל שלך: גישה נקראת-בלבד (read-only) לתמונות
+    שאתה עצמך בוחר באופן מפורש דרך חלון הבחירה הרשמי של Google (Google Photos Picker). האפליקציה
+    <b>אינה</b> מקבלת גישה לכל ספריית התמונות שלך — רק לפריטים שסימנת בעצמך באותה פעולת בחירה.</li>
+  </ul>
+
+  <h2>כיצד המידע משמש</h2>
+  <ul>
+    <li>בניית דף הטיול המבוקש (טקסט, מפה, גלריית תמונות).</li>
+    <li>תמונות שנבחרו מ-Google Photos מורדות פעם אחת (בגודל מוקטן לתצוגה באתר, לא המקור), משמשות
+    להרכבת דף הטיול שלך בלבד, ואינן נמכרות, משותפות עם צד שלישי, או משמשות לפרסום או לאימון מודלים.</li>
+    <li>אנחנו משתמשים ב-Google Gemini API כדי לעבד ולנסח את תוכן הטיול מתוך הטקסט/המסמכים שהעלית.</li>
+  </ul>
+
+  <h2>שמירה ומחיקה</h2>
+  <p>הטיולים והתמונות נשמרים כל עוד החשבון שלך פעיל. ניתן למחוק כל טיול בנפרד מתוך רשימת "הטיולים
+  שלי" באתר — פעולה זו מוחקת לצמיתות את כל הקבצים והנתונים הקשורים לאותו טיול, כולל תמונות שהורדו
+  מ-Google Photos. ניתן לבטל בכל עת את הגישה של MemoTrip לחשבון הגוגל שלך דרך
+  <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">הרשאות חשבון Google</a> שלך.</p>
+
+  <h2>יצירת קשר</h2>
+  <p>שאלות לגבי פרטיות ניתן לשלוח אל: <a href="mailto:dorin.z93@gmail.com">dorin.z93@gmail.com</a></p>
+</main>
+</body>
+</html>
