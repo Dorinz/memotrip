@@ -377,10 +377,9 @@ def index(request: Request):
             f'</div>' for r in rows)
         trips_html = (f'<div class="trips" id="trips"><h2>הטיולים שלך</h2>'
                        + (cards or '<p class="hint">דפי הטיולים שלכם יופיעו כאן אחרי שתצרו אותם.</p>') + '</div>')
-        display = user["display_name"] or user["email"]
-        initial = display.strip()[:1].upper() if display.strip() else "?"
+        initial = user["email"].strip()[:1].upper() if user["email"].strip() else "?"
         account_html = (
-            f'<div class="account-corner" title="{_html.escape(display)}">'
+            f'<div class="account-corner" title="{_html.escape(user["email"])}">'
             f'<button type="button" class="avatar" id="avatarBtn" aria-haspopup="true" '
             f'aria-expanded="false">{_html.escape(initial)}</button>'
             f'<div class="account-menu" id="accountMenu" hidden>'
@@ -419,9 +418,6 @@ def login_page(request: Request, signup: str = "", error: str = ""):
         FORM_ACTION=("/signup" if is_signup else "/login"),
         PW_AUTOCOMPLETE=("new-password" if is_signup else "current-password"),
         PW_HINT=('<div class="hint-small">לפחות 6 תווים.</div>' if is_signup else ""),
-        NAME_FIELD=('<label>שם / כינוי</label>'
-                    '<input type="text" name="name" required autocomplete="nickname">'
-                    if is_signup else ""),
         SUBMIT_LABEL=("יצירת חשבון" if is_signup else "התחברות"),
         ERROR=(f'<div class="err-banner show">{_html.escape(error)}</div>' if error else ""))
 
@@ -437,20 +433,18 @@ def login_submit(request: Request, email: str = Form(...), password: str = Form(
 
 
 @app.post("/signup")
-def signup_submit(request: Request, email: str = Form(...), password: str = Form(...),
-                  name: str = Form("")):
+def signup_submit(request: Request, email: str = Form(...), password: str = Form(...)):
     email = email.strip().lower()
-    name = name.strip()
-    if not EMAIL_RE.match(email) or len(password) < 6 or not name:
+    if not EMAIL_RE.match(email) or len(password) < 6:
         return RedirectResponse(
-            "/login?signup=1&error=" + urllib.parse.quote("שם, אימייל תקין, וסיסמה (6+ תווים)."),
+            "/login?signup=1&error=" + urllib.parse.quote("אימייל תקין וסיסמה (6+ תווים)."),
             status_code=303)
     if get_user_by_email(email):
         return RedirectResponse(
             "/login?signup=1&error=" + urllib.parse.quote("כבר יש חשבון עם האימייל הזה."), status_code=303)
     with db() as c:
-        c.execute("INSERT INTO users(email, password_hash, display_name, created) VALUES(?,?,?,?)",
-                  (email, hash_password(password), name, time.strftime("%Y-%m-%d %H:%M")))
+        c.execute("INSERT INTO users(email, password_hash, created) VALUES(?,?,?)",
+                  (email, hash_password(password), time.strftime("%Y-%m-%d %H:%M")))
     request.session["user_id"] = get_user_by_email(email)["id"]
     return RedirectResponse("/", status_code=303)
 

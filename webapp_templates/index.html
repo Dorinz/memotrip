@@ -7,7 +7,7 @@
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Secular+One&family=Assistant:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Secular+One&family=Akaya+Telivigala&family=Assistant:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root{
     /* the ten accent colors, in order (deep violet -> mint), used verbatim for
@@ -41,6 +41,8 @@
   ::selection{ background:var(--turquoise); color:var(--bg-0); }
   .mono{ font-family:'IBM Plex Mono', monospace; direction:ltr; unicode-bidi:embed; letter-spacing:0.02em; }
   h1,h2,.display{ font-family:'Secular One', sans-serif; font-weight:400; }
+  /* the MemoTrip wordmark only - the only h1 on this page */
+  h1{ font-family:'Akaya Telivigala', 'Secular One', sans-serif; font-weight:bold; }
   a{ color:inherit; }
   .wrap{ max-width:640px; margin:0 auto; padding:0 24px; }
   /* a plain quiet caption above the headline, not an uppercase tracked "label
@@ -121,60 +123,60 @@
      produced the "flying backward" plane. direction variety comes only from
      each path's own shape now, never from playback direction. */
   .plane.p1{
-    offset-path:path("M941,305 A40,40 0 0 1 1022,305 A40,40 0 0 1 941,305 A333,271 149 0 1 1510,-39 A333,271 149 0 1 941,305 Z");
+    offset-path:path("M1040,247 A28,28 0 0 1 1096,247 A28,28 0 0 1 1040,247 A217,175 149 0 1 1412,22 A217,175 149 0 1 1040,247 Z");
     animation:fly 42s linear infinite;
   }
   .plane.p1 svg{ width:56px; height:56px; }
   .plane.p2{
-    offset-path:path("M1005,1214 A58,58 0 0 1 1120,1214 A58,58 0 0 1 1005,1214 A453,289 71 0 1 716,356 A453,289 71 0 1 1005,1214 Z");
+    offset-path:path("M955,1055 A40,40 0 0 1 1034,1055 A40,40 0 0 1 955,1055 A286,185 71 0 1 772,514 A286,185 71 0 1 955,1055 Z");
     animation:fly 51s linear infinite; animation-delay:-14s;
   }
   .plane.p2 svg{ width:40px; height:40px; }
   .plane.p2 .plane-fill{ fill:var(--pal-1); }
   .plane.p3{
-    offset-path:path("M1864,925 A44,44 0 0 1 1953,925 A44,44 0 0 1 1864,925 A361,237 21 0 1 1192,664 A361,237 21 0 1 1864,925 Z");
+    offset-path:path("M1750,877 A30,30 0 0 1 1811,877 A30,30 0 0 1 1750,877 A233,159 21 0 1 1315,709 A233,159 21 0 1 1750,877 Z");
     animation:fly 35s linear infinite; animation-delay:-9s;
   }
   .plane.p3 svg{ width:34px; height:34px; }
   .plane.p3 .plane-fill{ fill:var(--pal-2); }
   .plane.p4{
-    offset-path:path("M1059,817 A49,49 0 0 1 1157,817 A49,49 0 0 1 1059,817 A401,297 67 0 1 745,78 A401,297 67 0 1 1059,817 Z");
+    offset-path:path("M999,685 A34,34 0 0 1 1066,685 A34,34 0 0 1 999,685 A257,188 67 0 1 799,212 A257,188 67 0 1 999,685 Z");
     animation:fly 47s linear infinite; animation-delay:-31s;
   }
   .plane.p4 svg{ width:30px; height:30px; }
   .plane.p4 .plane-fill{ fill:var(--pal-3); }
   .plane.p5{
-    offset-path:path("M598,1102 A44,44 0 0 1 687,1102 A44,44 0 0 1 598,1102 A349,302 77 0 1 441,423 A349,302 77 0 1 598,1102 Z");
+    offset-path:path("M575,985 A30,30 0 0 1 636,985 A30,30 0 0 1 575,985 A226,191 77 0 1 473,544 A226,191 77 0 1 575,985 Z");
     animation:fly 39s linear infinite; animation-delay:-4s;
   }
   .plane.p5 svg{ width:46px; height:46px; }
   .plane.p5 .plane-fill{ fill:var(--pal-4); }
   .plane.p6{
-    offset-path:path("M1354,442 A43,43 0 0 1 1440,442 A43,43 0 0 1 1354,442 A362,315 126 0 1 1778,-145 A362,315 126 0 1 1354,442 Z");
+    offset-path:path("M1428,338 A29,29 0 0 1 1487,338 A29,29 0 0 1 1428,338 A234,198 126 0 1 1702,-41 A234,198 126 0 1 1428,338 Z");
     animation:fly 58s linear infinite; animation-delay:-22s;
   }
   .plane.p6 svg{ width:26px; height:26px; }
   .plane.p6 .plane-fill{ fill:var(--pal-5); }
   .plane.p7{
-    offset-path:path("M1509,1129 A58,58 0 0 1 1624,1129 A58,58 0 0 1 1509,1129 A443,308 52 0 1 962,433 A443,308 52 0 1 1509,1129 Z");
+    offset-path:path("M1408,1001 A40,40 0 0 1 1487,1001 A40,40 0 0 1 1408,1001 A280,194 52 0 1 1061,561 A280,194 52 0 1 1408,1001 Z");
     animation:fly 33s linear infinite; animation-delay:-17s;
   }
   .plane.p7 svg{ width:38px; height:38px; }
   .plane.p7 .plane-fill{ fill:var(--pal-6); }
   .plane.p8{
-    offset-path:path("M1548,882 A39,39 0 0 1 1626,882 A39,39 0 0 1 1548,882 A426,238 88 0 1 1518,31 A426,238 88 0 1 1548,882 Z");
+    offset-path:path("M1546,727 A27,27 0 0 1 1600,727 A27,27 0 0 1 1546,727 A271,159 88 0 1 1528,187 A271,159 88 0 1 1546,727 Z");
     animation:fly 44s linear infinite; animation-delay:-27s;
   }
   .plane.p8 svg{ width:22px; height:22px; }
   .plane.p8 .plane-fill{ fill:var(--pal-7); }
   .plane.p9{
-    offset-path:path("M1463,804 A52,52 0 0 1 1567,804 A52,52 0 0 1 1463,804 A400,325 56 0 1 1021,137 A400,325 56 0 1 1463,804 Z");
+    offset-path:path("M1381,683 A36,36 0 0 1 1453,683 A36,36 0 0 1 1381,683 A256,203 56 0 1 1099,256 A256,203 56 0 1 1381,683 Z");
     animation:fly 29s linear infinite; animation-delay:-11s;
   }
   .plane.p9 svg{ width:48px; height:48px; }
   .plane.p9 .plane-fill{ fill:var(--pal-8); }
   .plane.p10{
-    offset-path:path("M179,220 A47,47 0 0 1 273,220 A47,47 0 0 1 179,220 A384,321 170 0 1 935,87 A384,321 170 0 1 179,220 Z");
+    offset-path:path("M313,195 A33,33 0 0 1 378,195 A33,33 0 0 1 313,195 A246,200 170 0 1 798,110 A246,200 170 0 1 313,195 Z");
     animation:fly 36s linear infinite; animation-delay:-19s;
   }
   .plane.p10 svg{ width:32px; height:32px; }
@@ -182,31 +184,31 @@
 
   /* 5 more, relatively large - purple/turquoise family only, no black */
   .plane.p11{
-    offset-path:path("M-247,141 A54,54 0 0 1 -138,141 A54,54 0 0 1 -247,141 A418,298 179 0 1 590,123 A418,298 179 0 1 -247,141 Z");
+    offset-path:path("M-96,140 A38,38 0 0 1 -21,140 A38,38 0 0 1 -96,140 A266,189 179 0 1 436,128 A266,189 179 0 1 -96,140 Z");
     animation:fly 49s linear infinite; animation-delay:-6s;
   }
   .plane.p11 svg{ width:58px; height:58px; }
   .plane.p11 .plane-fill{ fill:var(--pal-1); }
   .plane.p12{
-    offset-path:path("M195,1186 A41,41 0 0 1 277,1186 A41,41 0 0 1 195,1186 A414,223 83 0 1 95,365 A414,223 83 0 1 195,1186 Z");
+    offset-path:path("M179,1037 A28,28 0 0 1 235,1037 A28,28 0 0 1 179,1037 A263,151 83 0 1 115,514 A263,151 83 0 1 179,1037 Z");
     animation:fly 41s linear infinite; animation-delay:-24s;
   }
   .plane.p12 svg{ width:52px; height:52px; }
   .plane.p12 .plane-fill{ fill:var(--pal-6); }
   .plane.p13{
-    offset-path:path("M828,742 A46,46 0 0 1 919,742 A46,46 0 0 1 828,742 A428,236 45 0 1 219,142 A428,236 45 0 1 828,742 Z");
+    offset-path:path("M720,635 A31,31 0 0 1 783,635 A31,31 0 0 1 720,635 A271,158 45 0 1 334,254 A271,158 45 0 1 720,635 Z");
     animation:fly 37s linear infinite; animation-delay:-13s;
   }
   .plane.p13 svg{ width:62px; height:62px; }
   .plane.p13 .plane-fill{ fill:var(--pal-3); }
   .plane.p14{
-    offset-path:path("M549,270 A54,54 0 0 1 657,270 A54,54 0 0 1 549,270 A383,286 159 0 1 1263,-4 A383,286 159 0 1 549,270 Z");
+    offset-path:path("M673,223 A37,37 0 0 1 748,223 A37,37 0 0 1 673,223 A246,183 159 0 1 1132,47 A246,183 159 0 1 673,223 Z");
     animation:fly 53s linear infinite; animation-delay:-33s;
   }
   .plane.p14 svg{ width:54px; height:54px; }
   .plane.p14 .plane-fill{ fill:var(--turquoise-deep); }
   .plane.p15{
-    offset-path:path("M-168,586 A57,57 0 0 1 -54,586 A57,57 0 0 1 -168,586 A378,263 159 0 1 539,317 A378,263 159 0 1 -168,586 Z");
+    offset-path:path("M-45,539 A39,39 0 0 1 33,539 A39,39 0 0 1 -45,539 A243,172 159 0 1 409,365 A243,172 159 0 1 -45,539 Z");
     animation:fly 45s linear infinite; animation-delay:-28s;
   }
   .plane.p15 svg{ width:60px; height:60px; }
