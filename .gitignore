@@ -1,5 +1,6 @@
 # secrets — never commit
 credentials.json
+credentials_web.json
 token.json
 .env
 session_secret.txt

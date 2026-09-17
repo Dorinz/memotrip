@@ -1,0 +1,14 @@
+.git
+webapp_data/
+trips.db
+azores-archive/
+.claude/
+.impeccable/
+__pycache__/
+*.pyc
+.env
+credentials.json
+credentials_web.json
+token.json
+session_secret.txt
+geocode_cache.json

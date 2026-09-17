@@ -26,8 +26,6 @@ import pathlib
 import re
 import secrets
 import shutil
-import sqlite3
-import threading
 import time
 import traceback
 import urllib.parse
@@ -37,7 +35,7 @@ import html as _html
 
 import bcrypt
 import uvicorn
-from fastapi import FastAPI, Form, Request, UploadFile
+from fastapi import FastAPI, Form, Header, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
@@ -48,10 +46,12 @@ import gen_copy
 import select_photos
 import fetch_photos
 import palette
+import config
+import db as _db
+import tasks
 
 ROOT = pathlib.Path(__file__).resolve().parent
 DATA = ROOT / "webapp_data"
-DB = ROOT / "trips.db"
 TEMPLATE = (ROOT / "trip_template.html").read_text(encoding="utf-8")
 MODEL = os.environ.get("TRIP_MODEL", "gemini-3.6-flash")
 DATA.mkdir(exist_ok=True)
@@ -78,31 +78,17 @@ def render(name: str, **marks) -> HTMLResponse:
 
 
 # ------------------------------------------------------------------------- db
+#
+# db.py picks the backend: sqlite (trips.db, exactly as before) for local dev,
+# or Postgres when DATABASE_URL is set (prod / Cloud SQL). db() is kept here
+# as a same-named wrapper so every existing `with db() as c: c.execute(...)`
+# call site below needs no changes.
 
 def db():
-    c = sqlite3.connect(DB)
-    c.row_factory = sqlite3.Row
-    return c
+    return _db.db()
 
 
-with db() as _c:
-    _c.execute("""CREATE TABLE IF NOT EXISTS trips(
-        id TEXT PRIMARY KEY, created TEXT, description TEXT, region_hint TEXT,
-        status TEXT, stage TEXT, log TEXT, error TEXT,
-        picker_uri TEXT, picker_sid TEXT)""")
-    # user_id: nullable - a guest's trip has none, and is never listed under any account
-    _cols = {r["name"] for r in _c.execute("PRAGMA table_info(trips)")}
-    if "user_id" not in _cols:
-        _c.execute("ALTER TABLE trips ADD COLUMN user_id INTEGER")
-    _c.execute("""CREATE TABLE IF NOT EXISTS users(
-        id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE NOT NULL,
-        password_hash TEXT NOT NULL, display_name TEXT, created TEXT)""")
-    _ucols = {r["name"] for r in _c.execute("PRAGMA table_info(users)")}
-    if "email" not in _ucols and "username" in _ucols:
-        _c.execute("ALTER TABLE users RENAME COLUMN username TO email")
-        _ucols.discard("username"); _ucols.add("email")
-    if "display_name" not in _ucols:
-        _c.execute("ALTER TABLE users ADD COLUMN display_name TEXT")
+_db.init_schema()
 
 
 def trip_dir(tid: str) -> pathlib.Path:
@@ -250,7 +236,7 @@ def run_build(tid: str):
         if row2 and row2["picker_sid"]:
             update(tid, stage="ממתין לבחירת התמונות")
             try:
-                http = fetch_photos.authorise(ROOT / "credentials.json", ROOT / "token.json")
+                http = fetch_photos.authorise_for_user(row2["user_id"], config.OAUTH_WEB_CLIENT_PATH)
                 if _wait_for_pick(row2["picker_sid"], http, 90):
                     _download_and_select(tid, http, row2["picker_sid"])
                     update(tid, status="ready", stage="הושלם", error=None, picker_uri=None, picker_sid=None)
@@ -313,9 +299,10 @@ def run_photos(tid: str):
     """The trip page's manual 'add photos' button - the user is actively watching,
     so it's fine to wait longer and fail the trip if the pick never completes."""
     try:
-        sid = get_trip(tid)["picker_sid"]
+        row = get_trip(tid)
+        sid = row["picker_sid"]
         update(tid, status="running", stage="ממתין לבחירת התמונות", error=None)
-        http = fetch_photos.authorise(ROOT / "credentials.json", ROOT / "token.json")
+        http = fetch_photos.authorise_for_user(row["user_id"], config.OAUTH_WEB_CLIENT_PATH)
         if not _wait_for_pick(sid, http, 600):
             raise RuntimeError("פג הזמן להמתנה לבחירת התמונות ב-Google Photos")
         _download_and_select(tid, http, sid)
@@ -446,14 +433,71 @@ def logout(request: Request):
     return RedirectResponse("/", status_code=303)
 
 
+@app.get("/oauth/photos/start")
+def oauth_photos_start(request: Request, next: str = "/"):
+    """Kicks off the per-user Google Photos OAuth flow - each user connects
+    their own Google account (stored in the photo_accounts table), replacing
+    the old shared token.json. Requires login first.
+
+    OPERATOR NOTE: credentials_web.json must be a Web application OAuth
+    client in Google Cloud Console (Credentials -> Create credentials ->
+    OAuth client ID -> Web application) - NOT the Desktop app type used by
+    fetch_photos.py's standalone CLI - with both
+    http://localhost:8000/oauth/photos/callback and the production
+    {PUBLIC_BASE_URL}/oauth/photos/callback registered as Authorized redirect
+    URIs. This is a manual Google Cloud Console step; it can't be done from
+    code."""
+    user = current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    state = secrets.token_urlsafe(24)
+    url, code_verifier = fetch_photos.build_auth_url(
+        config.OAUTH_WEB_CLIENT_PATH,
+        f"{config.PUBLIC_BASE_URL}/oauth/photos/callback",
+        state)
+    request.session["photos_oauth_state"] = state
+    request.session["photos_oauth_next"] = next
+    request.session["photos_oauth_verifier"] = code_verifier
+    return RedirectResponse(url, status_code=303)
+
+
+@app.get("/oauth/photos/callback")
+def oauth_photos_callback(request: Request, code: str = "", state: str = ""):
+    expected = request.session.pop("photos_oauth_state", None)
+    next_url = request.session.pop("photos_oauth_next", "/") or "/"
+    verifier = request.session.pop("photos_oauth_verifier", None)
+    user = current_user(request)
+    if not user or not state or not expected or state != expected or not verifier:
+        return RedirectResponse("/login", status_code=303)
+    try:
+        creds = fetch_photos.exchange_code(
+            config.OAUTH_WEB_CLIENT_PATH,
+            f"{config.PUBLIC_BASE_URL}/oauth/photos/callback",
+            code, verifier)
+        fetch_photos.save_user_credentials(user["id"], creds)
+    except Exception as e:
+        return HTMLResponse(f"Google Photos connection failed: {_html.escape(str(e))}", status_code=500)
+    return RedirectResponse(next_url, status_code=303)
+
+
 @app.post("/photos/session")
-def photos_session():
+def photos_session(request: Request):
     """Open a Google Photos picker session ahead of trip creation, so the user
     can grant access / start picking right from the landing page. Not tied to
-    any trip yet - the returned sid rides along with the /trips form post."""
+    any trip yet - the returned sid rides along with the /trips form post.
+
+    Requires a logged-in user with Google Photos already connected (each user
+    authorises their own Google account - see /oauth/photos/start); a guest
+    or an unconnected account gets a JSON error the front end redirects on."""
+    user = current_user(request)
+    if not user:
+        return JSONResponse({"error": "login required", "login_url": "/login"}, status_code=401)
     try:
-        http, session = fetch_photos.open_session(ROOT / "credentials.json", ROOT / "token.json")
+        http, session = fetch_photos.open_session_for_user(user["id"], config.OAUTH_WEB_CLIENT_PATH)
         return {"picker_uri": session["pickerUri"], "sid": session["id"]}
+    except fetch_photos.PhotosNotConnected:
+        return JSONResponse({"error": "connect Google Photos first",
+                              "connect_url": "/oauth/photos/start?next=/"}, status_code=401)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
@@ -478,7 +522,7 @@ async def create(request: Request, description: str = Form(""), region_hint: str
                   "picker_sid, user_id) VALUES(?,?,?,?,?,?,?,?,?)",
                   (tid, time.strftime("%Y-%m-%d %H:%M"), description, region_hint,
                    "queued", "queued", "", picker_sid or None, user["id"] if user else None))
-    threading.Thread(target=run_build, args=(tid,), daemon=True).start()
+    tasks.enqueue("build", tid)
     return RedirectResponse(f"/trips/{tid}", status_code=303)
 
 
@@ -498,26 +542,35 @@ def status(tid: str):
 
 
 @app.post("/trips/{tid}/photos/start")
-def photos_start(tid: str):
+def photos_start(tid: str, request: Request):
+    user = current_user(request)
+    if not user:
+        return JSONResponse({"error": "login required", "login_url": "/login"}, status_code=401)
     try:
-        http, session = fetch_photos.open_session(ROOT / "credentials.json", ROOT / "token.json")
+        http, session = fetch_photos.open_session_for_user(user["id"], config.OAUTH_WEB_CLIENT_PATH)
         update(tid, picker_uri=session["pickerUri"], picker_sid=session["id"])
         return {"picker_uri": session["pickerUri"]}
+    except fetch_photos.PhotosNotConnected:
+        return JSONResponse({"error": "connect Google Photos first",
+                              "connect_url": f"/oauth/photos/start?next=/trips/{tid}"}, status_code=401)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
 @app.post("/trips/{tid}/photos/finish")
-def photos_finish(tid: str):
+def photos_finish(tid: str, request: Request):
+    user = current_user(request)
+    if not user:
+        return JSONResponse({"error": "login required", "login_url": "/login"}, status_code=401)
     if not get_trip(tid)["picker_sid"]:
         return JSONResponse({"error": "start the picker first"}, status_code=400)
-    threading.Thread(target=run_photos, args=(tid,), daemon=True).start()
+    tasks.enqueue("photos", tid)
     return {"ok": True}
 
 
 @app.post("/trips/{tid}/rerun")
 def rerun(tid: str):
-    threading.Thread(target=run_build, args=(tid,), daemon=True).start()
+    tasks.enqueue("build", tid)
     return RedirectResponse(f"/trips/{tid}", status_code=303)
 
 
@@ -560,6 +613,48 @@ def reroll_theme(tid: str):
     spec_path.write_bytes((json.dumps(spec, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
     html = build_trip.build(spec, TEMPLATE)
     (trip_dir(tid) / "page.html").write_bytes(html.replace("\r\n", "\n").encode("utf-8"))
+    return {"ok": True}
+
+
+# ------------------------------------------------------------- internal tasks
+#
+# Targets for tasks.enqueue()'s Cloud Tasks mode: Cloud Tasks calls these
+# synchronously (Cloud Run allocates CPU for the duration of the request,
+# unlike a scaled-to-zero idle instance) instead of the dev-mode
+# threading.Thread fallback. Protected by verifying the OIDC token Cloud
+# Tasks attaches to the request - see tasks.py's oidc_token config.
+
+def _verify_task_auth(authorization: str, expected_audience: str) -> None:
+    if not config.CLOUD_TASKS_QUEUE:
+        return   # local dev: no GCP infra configured - unused, the thread fallback never calls these
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=403, detail="missing task auth")
+    from google.auth.transport import requests as g_requests
+    from google.oauth2 import id_token
+    token = authorization[len("Bearer "):]
+    try:
+        claims = id_token.verify_oauth2_token(token, g_requests.Request(), audience=expected_audience)
+    except Exception:
+        raise HTTPException(status_code=403, detail="invalid task auth")
+    if config.TASKS_INVOKER_SA and claims.get("email") != config.TASKS_INVOKER_SA:
+        raise HTTPException(status_code=403, detail="unexpected invoker")
+
+
+@app.post("/internal/tasks/build/{tid}")
+def internal_task_build(tid: str, authorization: str = Header(default="")):
+    # audience is recomputed from config, not read off the request: behind
+    # Cloud Run's proxy, request.url can report scheme/host differently from
+    # the public https URL Cloud Tasks actually signed the OIDC token for,
+    # which made this check fail with a 403 for every dispatch.
+    _verify_task_auth(authorization, f"{config.PUBLIC_BASE_URL}/internal/tasks/build/{tid}")
+    run_build(tid)
+    return {"ok": True}
+
+
+@app.post("/internal/tasks/photos/{tid}")
+def internal_task_photos(tid: str, authorization: str = Header(default="")):
+    _verify_task_auth(authorization, f"{config.PUBLIC_BASE_URL}/internal/tasks/photos/{tid}")
+    run_photos(tid)
     return {"ok": True}
 
 

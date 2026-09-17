@@ -25,3 +25,9 @@ python-multipart>=0.0.9
 # webapp/ accounts + guest mode
 bcrypt>=4.1
 itsdangerous>=2.2
+
+# db.py (Postgres backend, prod - Cloud SQL; unused when DATABASE_URL is unset)
+psycopg2-binary>=2.9
+
+# tasks.py (Cloud Tasks backend, prod; unused when CLOUD_TASKS_QUEUE is unset)
+google-cloud-tasks>=2.16

@@ -686,6 +686,11 @@
       const r = await fetch('/photos/session', {method: 'POST'});
       const j = await r.json();
       if(j.error){
+        if(j.connect_url || j.login_url){
+          if(popup) popup.close();
+          window.location.href = j.connect_url || j.login_url;
+          return null;
+        }
         if(popup) popup.close();
         photosHint.textContent = 'לא הצלחנו להתחבר ל-Google Photos: ' + j.error;
         return null;

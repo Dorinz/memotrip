@@ -244,7 +244,10 @@ $("addphotos").onclick = async () => {
   $("addphotos").disabled = true;
   const r = await fetch(`/trips/${TID}/photos/start`, {method:"POST"});
   const j = await r.json();
-  if(j.error){ alert(j.error); $("addphotos").disabled=false; return; }
+  if(j.error){
+    if(j.connect_url || j.login_url){ window.location.href = j.connect_url || j.login_url; return; }
+    alert(j.error); $("addphotos").disabled=false; return;
+  }
   $("pickerlink").href = j.picker_uri;
   pickModal.hidden = false;
 };
@@ -258,7 +261,12 @@ $("reroll").onclick = async () => {
   $("open").href = url; $("dl").href = url; $("preview").src = url;
 };
 $("donepick").onclick = async () => {
-  await fetch(`/trips/${TID}/photos/finish`, {method:"POST"});
+  const r = await fetch(`/trips/${TID}/photos/finish`, {method:"POST"});
+  const j = await r.json().catch(() => ({}));
+  if(j.error){
+    if(j.connect_url || j.login_url){ window.location.href = j.connect_url || j.login_url; return; }
+    alert(j.error);
+  }
   pickModal.hidden = true;
   $("addphotos").disabled = false;
   $("ready").style.display = "none";
