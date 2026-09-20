@@ -214,6 +214,69 @@
   .plane.p15 svg{ width:60px; height:60px; }
   .plane.p15 .plane-fill{ fill:var(--pal-8); }
 
+  /* the 15 paths above are authored on a 1600x900 landscape reference canvas
+     - on a real phone (roughly 375-430 wide, portrait) only a thin vertical
+     slice of that canvas is ever on screen, so almost every plane sits
+     off-canvas at all times. This is a second, independent set of paths on
+     a portrait ~390x820 reference instead, swapped in below this width -
+     same construction as the desktop set (grid-anchored ellipses + a small
+     decorative loop) but sized for a phone screen. Plane sizes also shrink
+     a bit to stay in proportion with the smaller canvas. */
+  @media(max-width:560px){
+    /* the mobile loops are ~35-40% the size of the desktop ones (a small
+       canvas needs a small loop), but they kept the desktop's animation
+       duration - same distance-per-loop math at the same duration means a
+       much smaller loop moves far fewer real pixels per second, which is
+       exactly why this read as crawling instead of flying. Cutting each
+       plane's duration to roughly match its shrunk loop size (~40% of the
+       original) restores the same apparent speed as desktop. */
+    .plane.p1{ offset-path:path("M268,568 A18,18 0 0 1 303,568 A18,18 0 0 1 268,568 A79,96 8 0 1 110,547 A79,96 8 0 1 268,568 Z"); }
+    .plane.p1 svg{ width:38px; height:38px; }
+    .plane.p1{ animation-duration:17s; }
+    .plane.p2{ offset-path:path("M399,258 A15,15 0 0 1 429,258 A15,15 0 0 1 399,258 A73,80 3 0 1 253,251 A73,80 3 0 1 399,258 Z"); }
+    .plane.p2 svg{ width:28px; height:28px; }
+    .plane.p2{ animation-duration:20s; }
+    .plane.p3{ offset-path:path("M72,143 A14,14 0 0 1 100,143 A14,14 0 0 1 72,143 A62,76 84 0 1 58,19 A62,76 84 0 1 72,143 Z"); }
+    .plane.p3 svg{ width:24px; height:24px; }
+    .plane.p3{ animation-duration:14s; }
+    .plane.p4{ offset-path:path("M169,155 A14,14 0 0 1 197,155 A14,14 0 0 1 169,155 A74,90 119 0 1 242,26 A74,90 119 0 1 169,155 Z"); }
+    .plane.p4 svg{ width:20px; height:20px; }
+    .plane.p4{ animation-duration:19s; }
+    .plane.p5{ offset-path:path("M20,652 A13,13 0 0 1 46,652 A13,13 0 0 1 20,652 A85,100 127 0 1 123,518 A85,100 127 0 1 20,652 Z"); }
+    .plane.p5 svg{ width:32px; height:32px; }
+    .plane.p5{ animation-duration:16s; }
+    .plane.p6{ offset-path:path("M204,298 A17,17 0 0 1 238,298 A17,17 0 0 1 204,298 A57,98 72 0 1 169,189 A57,98 72 0 1 204,298 Z"); }
+    .plane.p6 svg{ width:18px; height:18px; }
+    .plane.p6{ animation-duration:23s; }
+    .plane.p7{ offset-path:path("M138,473 A17,17 0 0 1 173,473 A17,17 0 0 1 138,473 A80,75 38 0 1 11,375 A80,75 38 0 1 138,473 Z"); }
+    .plane.p7 svg{ width:26px; height:26px; }
+    .plane.p7{ animation-duration:13s; }
+    .plane.p8{ offset-path:path("M285,166 A16,16 0 0 1 318,166 A16,16 0 0 1 285,166 A67,77 113 0 1 338,43 A67,77 113 0 1 285,166 Z"); }
+    .plane.p8 svg{ width:15px; height:15px; }
+    .plane.p8{ animation-duration:18s; }
+    .plane.p9{ offset-path:path("M24,282 A12,12 0 0 1 48,282 A12,12 0 0 1 24,282 A65,104 136 0 1 118,193 A65,104 136 0 1 24,282 Z"); }
+    .plane.p9 svg{ width:33px; height:33px; }
+    .plane.p9{ animation-duration:12s; }
+    .plane.p10{ offset-path:path("M119,738 A15,15 0 0 1 148,738 A15,15 0 0 1 119,738 A57,99 32 0 1 22,678 A57,99 32 0 1 119,738 Z"); }
+    .plane.p10 svg{ width:22px; height:22px; }
+    .plane.p10{ animation-duration:14s; }
+    .plane.p11{ offset-path:path("M277,630 A12,12 0 0 1 300,630 A12,12 0 0 1 277,630 A77,79 116 0 1 344,491 A77,79 116 0 1 277,630 Z"); }
+    .plane.p11 svg{ width:39px; height:39px; }
+    .plane.p11{ animation-duration:20s; }
+    .plane.p12{ offset-path:path("M258,748 A13,13 0 0 1 284,748 A13,13 0 0 1 258,748 A63,104 145 0 1 361,675 A63,104 145 0 1 258,748 Z"); }
+    .plane.p12 svg{ width:35px; height:35px; }
+    .plane.p12{ animation-duration:16s; }
+    .plane.p13{ offset-path:path("M295,462 A12,12 0 0 1 318,462 A12,12 0 0 1 295,462 A67,101 116 0 1 352,341 A67,101 116 0 1 295,462 Z"); }
+    .plane.p13 svg{ width:42px; height:42px; }
+    .plane.p13{ animation-duration:15s; }
+    .plane.p14{ offset-path:path("M242,765 A13,13 0 0 1 268,765 A13,13 0 0 1 242,765 A63,98 59 0 1 178,657 A63,98 59 0 1 242,765 Z"); }
+    .plane.p14 svg{ width:36px; height:36px; }
+    .plane.p14{ animation-duration:21s; }
+    .plane.p15{ offset-path:path("M160,467 A14,14 0 0 1 187,467 A14,14 0 0 1 160,467 A72,82 108 0 1 205,329 A72,82 108 0 1 160,467 Z"); }
+    .plane.p15 svg{ width:40px; height:40px; }
+    .plane.p15{ animation-duration:18s; }
+  }
+
   @keyframes fly{ to{ offset-distance:100%; } }
 
   @supports not (offset-path: none){
@@ -270,7 +333,37 @@
   }
   .steps .step span{ font-size:0.92rem; color:var(--ink-dim); white-space:nowrap; }
   .steps .arrow{ color:var(--ink-dim); opacity:.4; font-size:1rem; align-self:center; flex:none; }
-  @media(max-width:560px){ .steps .arrow{ display:none; } }
+  /* the horizontal row (with side-scroll as a fallback) doesn't actually fit
+     on a real phone width even with the arrows removed - the row's natural
+     width exceeds the viewport, and a static scroll position of 0 in this
+     RTL row hides step 3 off to the left instead of scrolling to reveal it.
+     A vertical stack has no such width budget to run out of. */
+  @media(max-width:560px){
+    /* a real connected timeline, not a list: one line running through the
+       three circles top-to-bottom. The line's position only depends on the
+       circle's fixed size and the fact every .step packs to the same edge
+       (flex-start, i.e. the right in RTL) regardless of label length - so a
+       single absolutely-positioned line behind everything lines up with all
+       three without measuring each row. The whole widget gets a fixed width
+       and auto side margins so it sits centered in the card instead of
+       pinned to one edge. */
+    .steps .arrow{ display:none; }
+    .steps{
+      position:relative; flex-direction:column; flex-wrap:nowrap; overflow:visible;
+      align-items:stretch; width:220px; margin:38px auto 6px; padding:0; gap:24px;
+    }
+    .steps::before{
+      content:''; position:absolute; top:15px; bottom:15px; right:14px; width:2px;
+      background:linear-gradient(to bottom, var(--turquoise-bright), var(--pal-2));
+      border-radius:2px;
+    }
+    .steps .step{ position:relative; z-index:1; padding:0; }
+    .steps .step b{
+      width:30px; height:30px; font-size:0.94rem;
+      box-shadow:0 5px 12px -4px rgba(35,155,199,0.6);
+    }
+    .steps .step span{ font-size:0.96rem; font-weight:500; }
+  }
 
   /* ---------- form card ---------- */
   main{ padding:8px 0 90px; }

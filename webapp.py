@@ -119,7 +119,10 @@ def get_user_by_email(email: str):
         return c.execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
 
 
-EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+# deliberately stricter than "anything but @ and whitespace" - that let
+# through things like "<script>...</script>@x.com" as a "valid" email
+EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$")
+MAX_PASSWORD_LEN = 72   # bcrypt's own hard limit in bytes; hashing a longer one raises
 
 
 def get_user(uid: int):
@@ -422,30 +425,56 @@ def login_page(request: Request, signup: str = "", error: str = ""):
         ERROR=(f'<div class="err-banner show">{_html.escape(error)}</div>' if error else ""))
 
 
+def _finish_login(request: Request, user_id: int) -> None:
+    """Common tail of login and signup: set the session, and if this browser
+    already connected its own Google Photos as a guest, carry that
+    connection over instead of losing it (see migrate_guest_connection)."""
+    request.session["user_id"] = user_id
+    gid = request.session.pop("guest_id", None)
+    if gid:
+        fetch_photos.migrate_guest_connection(gid, f"user:{user_id}")
+
+
 @app.post("/login")
-def login_submit(request: Request, email: str = Form(...), password: str = Form(...)):
+def login_submit(request: Request, email: str = Form(""), password: str = Form("")):
+    if current_user(request):
+        return RedirectResponse("/", status_code=303)
     u = get_user_by_email(email.strip().lower())
     if not u or not verify_password(password, u["password_hash"]):
         return RedirectResponse(
             "/login?error=" + urllib.parse.quote("אימייל או סיסמה שגויים."), status_code=303)
-    request.session["user_id"] = u["id"]
+    _finish_login(request, u["id"])
     return RedirectResponse("/", status_code=303)
 
 
 @app.post("/signup")
-def signup_submit(request: Request, email: str = Form(...), password: str = Form(...)):
+def signup_submit(request: Request, email: str = Form(""), password: str = Form("")):
+    if current_user(request):
+        return RedirectResponse("/", status_code=303)
     email = email.strip().lower()
-    if not EMAIL_RE.match(email) or len(password) < 6:
+    if not EMAIL_RE.match(email) or len(password) < 6 or len(password) > MAX_PASSWORD_LEN:
         return RedirectResponse(
-            "/login?signup=1&error=" + urllib.parse.quote("אימייל תקין וסיסמה (6+ תווים)."),
+            "/login?signup=1&error=" + urllib.parse.quote(
+                f"אימייל תקין וסיסמה בין 6 ל-{MAX_PASSWORD_LEN} תווים."),
             status_code=303)
     if get_user_by_email(email):
         return RedirectResponse(
             "/login?signup=1&error=" + urllib.parse.quote("כבר יש חשבון עם האימייל הזה."), status_code=303)
-    with db() as c:
-        c.execute("INSERT INTO users(email, password_hash, created) VALUES(?,?,?)",
-                  (email, hash_password(password), time.strftime("%Y-%m-%d %H:%M")))
-    request.session["user_id"] = get_user_by_email(email)["id"]
+    try:
+        with db() as c:
+            c.execute("INSERT INTO users(email, password_hash, created) VALUES(?,?,?)",
+                      (email, hash_password(password), time.strftime("%Y-%m-%d %H:%M")))
+    except Exception:
+        # someone else's concurrent signup for the same email won the race
+        # between our own check above and this insert - the DB's own unique
+        # constraint is what actually prevents the duplicate; without this
+        # catch the loser of that race got a raw 500 instead of the same
+        # friendly "already exists" message the pre-check gives everyone else.
+        if get_user_by_email(email):
+            return RedirectResponse(
+                "/login?signup=1&error=" + urllib.parse.quote("כבר יש חשבון עם האימייל הזה."), status_code=303)
+        raise
+    _finish_login(request, get_user_by_email(email)["id"])
     return RedirectResponse("/", status_code=303)
 
 
@@ -651,7 +680,15 @@ def delete_trip(request: Request, tid: str):
     if not row:
         return JSONResponse({"error": "not found"}, status_code=404)
     user = current_user(request)
-    if not user or row["user_id"] != user["id"]:
+    # a guest trip (user_id NULL) has no account to check against - fall back
+    # to the anonymous session identity instead, so the guest who actually
+    # created it can still delete it, while a stranger who only has the
+    # shareable link (a different session, so a different guest_id) can't.
+    if user:
+        owns_it = row["user_id"] == user["id"]
+    else:
+        owns_it = row["user_id"] is None and row["photo_owner_key"] == photo_owner_key(request)
+    if not owns_it:
         return JSONResponse({"error": "not allowed"}, status_code=403)
 
     with db() as c:

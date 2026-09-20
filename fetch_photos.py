@@ -161,6 +161,27 @@ def _web_client_info(client_secrets_path: pathlib.Path) -> tuple[str, str]:
     return info["client_id"], info["client_secret"]
 
 
+def migrate_guest_connection(guest_id: str, owner_key: str) -> None:
+    """Call right after a guest logs in or signs up (with the guest_id that
+    was in their session, if any): if that guest session already connected
+    its own Google Photos, re-key the row to the now-known account instead
+    of leaving it stranded under the old guest:<id> - otherwise connecting
+    once as a guest and then signing up moments later would force the user
+    through Google's consent screen a second time for no reason. If the
+    account already has its own connection, the guest's is simply dropped -
+    the account's own connection wins."""
+    if not guest_id:
+        return
+    import db as _db
+    guest_key = f"guest:{guest_id}"
+    with _db.db() as c:
+        has_own = c.execute("SELECT 1 FROM photo_accounts WHERE owner_key=?", (owner_key,)).fetchone()
+        if has_own:
+            c.execute("DELETE FROM photo_accounts WHERE owner_key=?", (guest_key,))
+        else:
+            c.execute("UPDATE photo_accounts SET owner_key=? WHERE owner_key=?", (owner_key, guest_key))
+
+
 def save_user_credentials(owner_key: str, creds: Credentials) -> None:
     """Upsert a photo_accounts row from a fresh Credentials object - call
     right after exchange_code(), and again whenever authorise_for_user()
