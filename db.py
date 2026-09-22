@@ -14,6 +14,7 @@ fresh prod database starts empty.
 Callers keep writing SQL with `?` placeholders exactly as before; _q()
 rewrites them to psycopg2's `%s` on the Postgres path only.
 """
+
 from __future__ import annotations
 
 import pathlib
@@ -22,7 +23,7 @@ import sqlite3
 import config
 
 ROOT = pathlib.Path(__file__).resolve().parent
-DB = ROOT / "trips.db"          # sqlite path — unused when DATABASE_URL is set
+DB = ROOT / "trips.db"  # sqlite path — unused when DATABASE_URL is set
 
 _IS_PG = bool(config.DATABASE_URL)
 
@@ -92,6 +93,7 @@ def db():
     if _IS_PG:
         import psycopg2
         import psycopg2.extras
+
         conn = psycopg2.connect(config.DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
         return _PGConn(conn)
     c = sqlite3.connect(DB)
@@ -125,7 +127,8 @@ def _init_schema_sqlite() -> None:
         _ucols = {r["name"] for r in _c.execute("PRAGMA table_info(users)")}
         if "email" not in _ucols and "username" in _ucols:
             _c.execute("ALTER TABLE users RENAME COLUMN username TO email")
-            _ucols.discard("username"); _ucols.add("email")
+            _ucols.discard("username")
+            _ucols.add("email")
         if "display_name" not in _ucols:
             _c.execute("ALTER TABLE users ADD COLUMN display_name TEXT")
         # Google Photos OAuth tokens, keyed by owner_key - "user:<id>" for a
@@ -158,8 +161,13 @@ def _init_schema_pg() -> None:
             status TEXT, stage TEXT, log TEXT, error TEXT,
             picker_uri TEXT, picker_sid TEXT, user_id INTEGER, photo_owner_key TEXT)""")
         _c.execute("""ALTER TABLE trips ADD COLUMN IF NOT EXISTS photo_owner_key TEXT""")
-        _pcols = {r["column_name"] for r in _c.execute(
-            "SELECT column_name FROM information_schema.columns WHERE table_name='photo_accounts'").fetchall()}
+        _pcols = {
+            r["column_name"]
+            for r in _c.execute(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name='photo_accounts'"
+            ).fetchall()
+        }
         if _pcols and "owner_key" not in _pcols:
             _c.execute("DROP TABLE photo_accounts")
         # keyed by owner_key ("user:<id>" or "guest:<random>"), not a plain

@@ -1,6 +1,7 @@
 """Import for its side effect: load KEY=VALUE lines from a local .env into os.environ
 (without overriding anything already set). Keeps the Gemini key with the project
 instead of in a shell session. No dependency."""
+
 import os
 import pathlib
 

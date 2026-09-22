@@ -1,860 +1,1041 @@
 <!doctype html>
 <html lang="he" dir="rtl">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MemoTrip — יומן מסע בקליק</title>
-<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Secular+One&family=Akaya+Telivigala&family=Assistant:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<style>
-  :root{
-    /* the ten accent colors, in order (deep violet -> mint), used verbatim for
-       the planes and every vivid highlight; --bg-*/--ink*/--muted are neutral
-       tints derived to match this family (a literal palette color would be
-       either too light to read as text or too saturated as a page background) */
-    --pal-0:#5a189a; --pal-1:#7b2cbf; --pal-2:#9d4edd; --pal-3:#c77dff; --pal-4:#e0aaff;
-    --pal-5:#48bfe3; --pal-6:#56cfe1; --pal-7:#64dfdf; --pal-8:#5aedc9; --pal-9:#80ffdb;
-    /* neutrals derived from turquoise/teal (the gradient blobs + planes keep the
-       full violet-to-mint palette as-is; only the page's own base tones shift) */
-    --bg-0:#F3FBFA; --bg-1:#E1F5F1; --bg-2:#FFFFFF; --bg-3:#E4FBF2;
-    --ink:#123C3D; --ink-dim:#3F6B6C; --muted:#4F7576;
-    /* headings/buttons/focus accents - a deep, saturated cyan-teal family (not
-       a literal palette hex - none of the given cyans/mints are dark enough
-       to hold white button text at a real contrast ratio) */
-    --turquoise:#239BC7; --turquoise-deep:#0F687F;
-    --sea:#2CA1DC; --sea-deep:#0A616A;
-    /* buttons + the step numbers: the actual lightest color in the given
-       palette (pal-9/pal-8), dark text instead of a deep bg + white text */
-    --turquoise-bright:#80ffdb; --turquoise-bright-hover:#5aedc9;
-    --line:rgba(18,60,61,0.14);
-    --shadow: 0 20px 50px -22px rgba(18,60,61,0.20);
-    --err:#B4483C; --err-bg:#FBECEA;
-  }
-  *{box-sizing:border-box; margin:0; padding:0;}
-  html{scroll-behavior:smooth;}
-  body{
-    color:var(--ink); font-family:'Assistant', sans-serif;
-    line-height:1.6;
-  }
-  ::selection{ background:var(--turquoise); color:var(--bg-0); }
-  .mono{ font-family:'IBM Plex Mono', monospace; direction:ltr; unicode-bidi:embed; letter-spacing:0.02em; }
-  h1,h2,.display{ font-family:'Secular One', sans-serif; font-weight:400; }
-  /* the MemoTrip wordmark only - the only h1 on this page */
-  h1{ font-family:'Akaya Telivigala', 'Secular One', sans-serif; font-weight:bold; }
-  a{ color:inherit; }
-  .wrap{ max-width:640px; margin:0 auto; padding:0 24px; }
-  /* a plain quiet caption above the headline, not an uppercase tracked "label
-     chip" — that shape is the generic default-AI-hero tell */
-  .eyebrow{
-    font-size:0.92rem; color:var(--ink-dim); font-weight:500; margin-bottom:14px; display:block;
-  }
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>MemoTrip — יומן מסע בקליק</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Secular+One&family=Akaya+Telivigala&family=Assistant:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root{
+        /* the ten accent colors, in order (deep violet -> mint), used verbatim for
+           the planes and every vivid highlight; --bg-*/--ink*/--muted are neutral
+           tints derived to match this family (a literal palette color would be
+           either too light to read as text or too saturated as a page background) */
+        --pal-0:#5a189a; --pal-1:#7b2cbf; --pal-2:#9d4edd; --pal-3:#c77dff; --pal-4:#e0aaff;
+        --pal-5:#48bfe3; --pal-6:#56cfe1; --pal-7:#64dfdf; --pal-8:#5aedc9; --pal-9:#80ffdb;
+        /* neutrals derived from turquoise/teal (the gradient blobs + planes keep the
+           full violet-to-mint palette as-is; only the page's own base tones shift) */
+        --bg-0:#F3FBFA; --bg-1:#E1F5F1; --bg-2:#FFFFFF; --bg-3:#E4FBF2;
+        --ink:#123C3D; --ink-dim:#3F6B6C; --muted:#4F7576;
+        /* headings/buttons/focus accents - a deep, saturated cyan-teal family (not
+           a literal palette hex - none of the given cyans/mints are dark enough
+           to hold white button text at a real contrast ratio) */
+        --turquoise:#239BC7; --turquoise-deep:#0F687F;
+        --sea:#2CA1DC; --sea-deep:#0A616A;
+        /* buttons + the step numbers: the actual lightest color in the given
+           palette (pal-9/pal-8), dark text instead of a deep bg + white text */
+        --turquoise-bright:#80ffdb; --turquoise-bright-hover:#5aedc9;
+        --line:rgba(18,60,61,0.14);
+        --shadow: 0 20px 50px -22px rgba(18,60,61,0.20);
+        --err:#B4483C; --err-bg:#FBECEA;
+      }
+      *{box-sizing:border-box; margin:0; padding:0;}
+      html{scroll-behavior:smooth;}
+      body{
+        color:var(--ink); font-family:'Assistant', sans-serif;
+        line-height:1.6;
+      }
+      ::selection{ background:var(--turquoise); color:var(--bg-0); }
+      .mono{ font-family:'IBM Plex Mono', monospace; direction:ltr; unicode-bidi:embed; letter-spacing:0.02em; }
+      h1,h2,.display{ font-family:'Secular One', sans-serif; font-weight:400; }
+      /* the MemoTrip wordmark only - the only h1 on this page */
+      h1{ font-family:'Akaya Telivigala', 'Secular One', sans-serif; font-weight:bold; }
+      a{ color:inherit; }
+      .wrap{ max-width:640px; margin:0 auto; padding:0 24px; }
+      /* a plain quiet caption above the headline, not an uppercase tracked "label
+         chip" — that shape is the generic default-AI-hero tell */
+      .eyebrow{
+        font-size:0.92rem; color:var(--ink-dim); font-weight:500; margin-bottom:14px; display:block;
+      }
 
-  /* ---------- planes, looping across the whole page ---------- */
-  /* one fixed full-viewport layer behind everything (z-index:-1). each plane
-     travels along a real closed flight path via `offset-path` + `offset-distance`
-     - a single animated property, compositor-accelerated like transform, with
-     none of the drift/mismatch a hand-tuned translate+rotate pair produces.
-     `offset-rotate:auto` is the actual fix for "flies sideways": it locks the
-     element's heading to the path's own tangent direction at every instant, so
-     the nose (drawn along local +x) always points exactly where it's moving -
-     guaranteed correct on every curve, not just at hand-picked waypoints. each
-     path is a closed loop (ends where it starts, in the same direction) with a
-     real aerobatic loop-the-loop built from two half-circle arcs, so motion
-     never jumps or resets - it just keeps circling, forward, indefinitely. */
-  .sky{
-    position:fixed; inset:0; z-index:-1; overflow:hidden; background:var(--bg-0);
-  }
-  /* soft blurred color blobs, slowly drifting (transform-only: translate+scale,
-     the blur itself is a static filter so it costs nothing extra per frame) -
-     a colorful "aurora" wash using the same ten accent colors, sitting behind
-     the planes and every card. */
-  .blob{
-    position:absolute; border-radius:50%; filter:blur(90px); opacity:0.32; will-change:transform;
-  }
-  .blob.b1{ width:640px; height:640px; top:-160px; left:-120px; background:var(--pal-0);
-            animation:drift-a 34s ease-in-out infinite; }
-  .blob.b2{ width:580px; height:580px; top:8%; right:-160px; background:var(--pal-5);
-            animation:drift-b 40s ease-in-out infinite; }
-  .blob.b3{ width:540px; height:540px; bottom:-180px; left:18%; background:var(--pal-8);
-            animation:drift-c 46s ease-in-out infinite; }
-  .blob.b4{ width:480px; height:480px; bottom:6%; right:8%; background:var(--pal-2);
-            animation:drift-a 38s ease-in-out infinite reverse; }
-  @keyframes drift-a{ 0%,100%{ transform:translate(0,0) scale(1); } 50%{ transform:translate(60px,44px) scale(1.12); } }
-  @keyframes drift-b{ 0%,100%{ transform:translate(0,0) scale(1); } 50%{ transform:translate(-56px,60px) scale(0.94); } }
-  @keyframes drift-c{ 0%,100%{ transform:translate(0,0) scale(1); } 50%{ transform:translate(46px,-56px) scale(1.06); } }
-  @media (prefers-reduced-motion: reduce){ .blob{ animation:none !important; } }
+      /* ---------- planes, looping across the whole page ---------- */
+      /* one fixed full-viewport layer behind everything (z-index:-1). each plane
+         travels along a real closed flight path via `offset-path` + `offset-distance`
+         - a single animated property, compositor-accelerated like transform, with
+         none of the drift/mismatch a hand-tuned translate+rotate pair produces.
+         `offset-rotate:auto` is the actual fix for "flies sideways": it locks the
+         element's heading to the path's own tangent direction at every instant, so
+         the nose (drawn along local +x) always points exactly where it's moving -
+         guaranteed correct on every curve, not just at hand-picked waypoints. each
+         path is a closed loop (ends where it starts, in the same direction) with a
+         real aerobatic loop-the-loop built from two half-circle arcs, so motion
+         never jumps or resets - it just keeps circling, forward, indefinitely. */
+      .sky{
+        position:fixed; inset:0; z-index:-1; overflow:hidden; background:var(--bg-0);
+      }
+      /* soft blurred color blobs, slowly drifting (transform-only: translate+scale,
+         the blur itself is a static filter so it costs nothing extra per frame) -
+         a colorful "aurora" wash using the same ten accent colors, sitting behind
+         the planes and every card. */
+      .blob{
+        position:absolute; border-radius:50%; filter:blur(90px); opacity:0.32; will-change:transform;
+      }
+      .blob.b1{ width:640px; height:640px; top:-160px; left:-120px; background:var(--pal-0);
+                animation:drift-a 34s ease-in-out infinite; }
+      .blob.b2{ width:580px; height:580px; top:8%; right:-160px; background:var(--pal-5);
+                animation:drift-b 40s ease-in-out infinite; }
+      .blob.b3{ width:540px; height:540px; bottom:-180px; left:18%; background:var(--pal-8);
+                animation:drift-c 46s ease-in-out infinite; }
+      .blob.b4{ width:480px; height:480px; bottom:6%; right:8%; background:var(--pal-2);
+                animation:drift-a 38s ease-in-out infinite reverse; }
+      @keyframes drift-a{ 0%,100%{ transform:translate(0,0) scale(1); } 50%{ transform:translate(60px,44px) scale(1.12); } }
+      @keyframes drift-b{ 0%,100%{ transform:translate(0,0) scale(1); } 50%{ transform:translate(-56px,60px) scale(0.94); } }
+      @keyframes drift-c{ 0%,100%{ transform:translate(0,0) scale(1); } 50%{ transform:translate(46px,-56px) scale(1.06); } }
+      @media (prefers-reduced-motion: reduce){ .blob{ animation:none !important; } }
 
-  /* ---------- procedural cloud texture (real SVG fractal noise, not a blur trick) ---------- */
-  /* feTurbulence generates genuine cauliflower-shaped fractal noise; the chain
-     below turns it into soft white cloud shapes with the purple/cyan blobs
-     showing through the gaps, same idea as the reference photo but recolored.
-     The filter itself is computed once - only `transform` is animated for the
-     drift, so it stays compositor-cheap regardless of the filter's own cost. */
-  .cloud-layer{
-    position:absolute; inset:-16%; width:132%; height:132%;
-    filter:url(#cloud-filter); opacity:1; mix-blend-mode:normal; will-change:transform;
-    animation:cloud-drift 100s linear infinite alternate;
-  }
-  @keyframes cloud-drift{
-    from{ transform:translate(0,0) scale(1); }
-    to{ transform:translate(-4%,-3%) scale(1.07); }
-  }
-  @media (prefers-reduced-motion: reduce){ .cloud-layer{ animation:none; } }
+      /* ---------- procedural cloud texture (real SVG fractal noise, not a blur trick) ---------- */
+      /* feTurbulence generates genuine cauliflower-shaped fractal noise; the chain
+         below turns it into soft white cloud shapes with the purple/cyan blobs
+         showing through the gaps, same idea as the reference photo but recolored.
+         The filter itself is computed once - only `transform` is animated for the
+         drift, so it stays compositor-cheap regardless of the filter's own cost. */
+      .cloud-layer{
+        position:absolute; inset:-16%; width:132%; height:132%;
+        filter:url(#cloud-filter); opacity:1; mix-blend-mode:normal; will-change:transform;
+        animation:cloud-drift 100s linear infinite alternate;
+      }
+      @keyframes cloud-drift{
+        from{ transform:translate(0,0) scale(1); }
+        to{ transform:translate(-4%,-3%) scale(1.07); }
+      }
+      @media (prefers-reduced-motion: reduce){ .cloud-layer{ animation:none; } }
 
-  .plane{
-    position:absolute; top:0; left:0; will-change:offset-distance;
-    offset-rotate:auto; offset-anchor:center;
-    filter:drop-shadow(0 8px 16px rgba(18,60,61,0.28));
-  }
-  .plane svg{ display:block; }
-  .plane .plane-fill{ fill:var(--sea-deep); }
-  /* a wider, wilder spread of hues than the 4 brand colors - still all teal/green/blue */
-  .plane.p1 .plane-fill{ fill:var(--pal-0); }
-  /* paths are authored on a 1600x900 reference canvas (a common landscape
-     viewport) - offset-path pixels don't rescale with the real viewport, so on
-     very different window sizes the loops sit slightly off-proportion; .sky's
-     overflow:hidden just clips anything that lands outside, which is fine for
-     a decorative background. */
-  /* every plane plays 0%->100% forward, never `reverse`/`alternate` - reversing
-     the animation moves the element backward along the path while offset-rotate
-     keeps facing the path's authored forward direction, which is exactly what
-     produced the "flying backward" plane. direction variety comes only from
-     each path's own shape now, never from playback direction. */
-  .plane.p1{
-    offset-path:path("M1040,247 A28,28 0 0 1 1096,247 A28,28 0 0 1 1040,247 A217,175 149 0 1 1412,22 A217,175 149 0 1 1040,247 Z");
-    animation:fly 42s linear infinite;
-  }
-  .plane.p1 svg{ width:56px; height:56px; }
-  .plane.p2{
-    offset-path:path("M955,1055 A40,40 0 0 1 1034,1055 A40,40 0 0 1 955,1055 A286,185 71 0 1 772,514 A286,185 71 0 1 955,1055 Z");
-    animation:fly 51s linear infinite; animation-delay:-14s;
-  }
-  .plane.p2 svg{ width:40px; height:40px; }
-  .plane.p2 .plane-fill{ fill:var(--pal-1); }
-  .plane.p3{
-    offset-path:path("M1750,877 A30,30 0 0 1 1811,877 A30,30 0 0 1 1750,877 A233,159 21 0 1 1315,709 A233,159 21 0 1 1750,877 Z");
-    animation:fly 35s linear infinite; animation-delay:-9s;
-  }
-  .plane.p3 svg{ width:34px; height:34px; }
-  .plane.p3 .plane-fill{ fill:var(--pal-2); }
-  .plane.p4{
-    offset-path:path("M999,685 A34,34 0 0 1 1066,685 A34,34 0 0 1 999,685 A257,188 67 0 1 799,212 A257,188 67 0 1 999,685 Z");
-    animation:fly 47s linear infinite; animation-delay:-31s;
-  }
-  .plane.p4 svg{ width:30px; height:30px; }
-  .plane.p4 .plane-fill{ fill:var(--pal-3); }
-  .plane.p5{
-    offset-path:path("M575,985 A30,30 0 0 1 636,985 A30,30 0 0 1 575,985 A226,191 77 0 1 473,544 A226,191 77 0 1 575,985 Z");
-    animation:fly 39s linear infinite; animation-delay:-4s;
-  }
-  .plane.p5 svg{ width:46px; height:46px; }
-  .plane.p5 .plane-fill{ fill:var(--pal-4); }
-  .plane.p6{
-    offset-path:path("M1428,338 A29,29 0 0 1 1487,338 A29,29 0 0 1 1428,338 A234,198 126 0 1 1702,-41 A234,198 126 0 1 1428,338 Z");
-    animation:fly 58s linear infinite; animation-delay:-22s;
-  }
-  .plane.p6 svg{ width:26px; height:26px; }
-  .plane.p6 .plane-fill{ fill:var(--pal-5); }
-  .plane.p7{
-    offset-path:path("M1408,1001 A40,40 0 0 1 1487,1001 A40,40 0 0 1 1408,1001 A280,194 52 0 1 1061,561 A280,194 52 0 1 1408,1001 Z");
-    animation:fly 33s linear infinite; animation-delay:-17s;
-  }
-  .plane.p7 svg{ width:38px; height:38px; }
-  .plane.p7 .plane-fill{ fill:var(--pal-6); }
-  .plane.p8{
-    offset-path:path("M1546,727 A27,27 0 0 1 1600,727 A27,27 0 0 1 1546,727 A271,159 88 0 1 1528,187 A271,159 88 0 1 1546,727 Z");
-    animation:fly 44s linear infinite; animation-delay:-27s;
-  }
-  .plane.p8 svg{ width:22px; height:22px; }
-  .plane.p8 .plane-fill{ fill:var(--pal-7); }
-  .plane.p9{
-    offset-path:path("M1381,683 A36,36 0 0 1 1453,683 A36,36 0 0 1 1381,683 A256,203 56 0 1 1099,256 A256,203 56 0 1 1381,683 Z");
-    animation:fly 29s linear infinite; animation-delay:-11s;
-  }
-  .plane.p9 svg{ width:48px; height:48px; }
-  .plane.p9 .plane-fill{ fill:var(--pal-8); }
-  .plane.p10{
-    offset-path:path("M313,195 A33,33 0 0 1 378,195 A33,33 0 0 1 313,195 A246,200 170 0 1 798,110 A246,200 170 0 1 313,195 Z");
-    animation:fly 36s linear infinite; animation-delay:-19s;
-  }
-  .plane.p10 svg{ width:32px; height:32px; }
-  .plane.p10 .plane-fill{ fill:var(--pal-9); }
+      .plane{
+        position:absolute; top:0; left:0; will-change:offset-distance;
+        offset-rotate:auto; offset-anchor:center;
+        filter:drop-shadow(0 8px 16px rgba(18,60,61,0.28));
+      }
+      .plane svg{ display:block; }
+      .plane .plane-fill{ fill:var(--sea-deep); }
+      /* a wider, wilder spread of hues than the 4 brand colors - still all teal/green/blue */
+      .plane.p1 .plane-fill{ fill:var(--pal-0); }
+      /* paths are authored on a 1600x900 reference canvas (a common landscape
+         viewport) - offset-path pixels don't rescale with the real viewport, so on
+         very different window sizes the loops sit slightly off-proportion; .sky's
+         overflow:hidden just clips anything that lands outside, which is fine for
+         a decorative background. */
+      /* every plane plays 0%->100% forward, never `reverse`/`alternate` - reversing
+         the animation moves the element backward along the path while offset-rotate
+         keeps facing the path's authored forward direction, which is exactly what
+         produced the "flying backward" plane. direction variety comes only from
+         each path's own shape now, never from playback direction. */
+      .plane.p1{
+        offset-path:path("M1040,247 A28,28 0 0 1 1096,247 A28,28 0 0 1 1040,247 A217,175 149 0 1 1412,22 A217,175 149 0 1 1040,247 Z");
+        animation:fly 42s linear infinite;
+      }
+      .plane.p1 svg{ width:56px; height:56px; }
+      .plane.p2{
+        offset-path:path("M955,1055 A40,40 0 0 1 1034,1055 A40,40 0 0 1 955,1055 A286,185 71 0 1 772,514 A286,185 71 0 1 955,1055 Z");
+        animation:fly 51s linear infinite; animation-delay:-14s;
+      }
+      .plane.p2 svg{ width:40px; height:40px; }
+      .plane.p2 .plane-fill{ fill:var(--pal-1); }
+      .plane.p3{
+        offset-path:path("M1750,877 A30,30 0 0 1 1811,877 A30,30 0 0 1 1750,877 A233,159 21 0 1 1315,709 A233,159 21 0 1 1750,877 Z");
+        animation:fly 35s linear infinite; animation-delay:-9s;
+      }
+      .plane.p3 svg{ width:34px; height:34px; }
+      .plane.p3 .plane-fill{ fill:var(--pal-2); }
+      .plane.p4{
+        offset-path:path("M999,685 A34,34 0 0 1 1066,685 A34,34 0 0 1 999,685 A257,188 67 0 1 799,212 A257,188 67 0 1 999,685 Z");
+        animation:fly 47s linear infinite; animation-delay:-31s;
+      }
+      .plane.p4 svg{ width:30px; height:30px; }
+      .plane.p4 .plane-fill{ fill:var(--pal-3); }
+      .plane.p5{
+        offset-path:path("M575,985 A30,30 0 0 1 636,985 A30,30 0 0 1 575,985 A226,191 77 0 1 473,544 A226,191 77 0 1 575,985 Z");
+        animation:fly 39s linear infinite; animation-delay:-4s;
+      }
+      .plane.p5 svg{ width:46px; height:46px; }
+      .plane.p5 .plane-fill{ fill:var(--pal-4); }
+      .plane.p6{
+        offset-path:path("M1428,338 A29,29 0 0 1 1487,338 A29,29 0 0 1 1428,338 A234,198 126 0 1 1702,-41 A234,198 126 0 1 1428,338 Z");
+        animation:fly 58s linear infinite; animation-delay:-22s;
+      }
+      .plane.p6 svg{ width:26px; height:26px; }
+      .plane.p6 .plane-fill{ fill:var(--pal-5); }
+      .plane.p7{
+        offset-path:path("M1408,1001 A40,40 0 0 1 1487,1001 A40,40 0 0 1 1408,1001 A280,194 52 0 1 1061,561 A280,194 52 0 1 1408,1001 Z");
+        animation:fly 33s linear infinite; animation-delay:-17s;
+      }
+      .plane.p7 svg{ width:38px; height:38px; }
+      .plane.p7 .plane-fill{ fill:var(--pal-6); }
+      .plane.p8{
+        offset-path:path("M1546,727 A27,27 0 0 1 1600,727 A27,27 0 0 1 1546,727 A271,159 88 0 1 1528,187 A271,159 88 0 1 1546,727 Z");
+        animation:fly 44s linear infinite; animation-delay:-27s;
+      }
+      .plane.p8 svg{ width:22px; height:22px; }
+      .plane.p8 .plane-fill{ fill:var(--pal-7); }
+      .plane.p9{
+        offset-path:path("M1381,683 A36,36 0 0 1 1453,683 A36,36 0 0 1 1381,683 A256,203 56 0 1 1099,256 A256,203 56 0 1 1381,683 Z");
+        animation:fly 29s linear infinite; animation-delay:-11s;
+      }
+      .plane.p9 svg{ width:48px; height:48px; }
+      .plane.p9 .plane-fill{ fill:var(--pal-8); }
+      .plane.p10{
+        offset-path:path("M313,195 A33,33 0 0 1 378,195 A33,33 0 0 1 313,195 A246,200 170 0 1 798,110 A246,200 170 0 1 313,195 Z");
+        animation:fly 36s linear infinite; animation-delay:-19s;
+      }
+      .plane.p10 svg{ width:32px; height:32px; }
+      .plane.p10 .plane-fill{ fill:var(--pal-9); }
 
-  /* 5 more, relatively large - purple/turquoise family only, no black */
-  .plane.p11{
-    offset-path:path("M-96,140 A38,38 0 0 1 -21,140 A38,38 0 0 1 -96,140 A266,189 179 0 1 436,128 A266,189 179 0 1 -96,140 Z");
-    animation:fly 49s linear infinite; animation-delay:-6s;
-  }
-  .plane.p11 svg{ width:58px; height:58px; }
-  .plane.p11 .plane-fill{ fill:var(--pal-1); }
-  .plane.p12{
-    offset-path:path("M179,1037 A28,28 0 0 1 235,1037 A28,28 0 0 1 179,1037 A263,151 83 0 1 115,514 A263,151 83 0 1 179,1037 Z");
-    animation:fly 41s linear infinite; animation-delay:-24s;
-  }
-  .plane.p12 svg{ width:52px; height:52px; }
-  .plane.p12 .plane-fill{ fill:var(--pal-6); }
-  .plane.p13{
-    offset-path:path("M720,635 A31,31 0 0 1 783,635 A31,31 0 0 1 720,635 A271,158 45 0 1 334,254 A271,158 45 0 1 720,635 Z");
-    animation:fly 37s linear infinite; animation-delay:-13s;
-  }
-  .plane.p13 svg{ width:62px; height:62px; }
-  .plane.p13 .plane-fill{ fill:var(--pal-3); }
-  .plane.p14{
-    offset-path:path("M673,223 A37,37 0 0 1 748,223 A37,37 0 0 1 673,223 A246,183 159 0 1 1132,47 A246,183 159 0 1 673,223 Z");
-    animation:fly 53s linear infinite; animation-delay:-33s;
-  }
-  .plane.p14 svg{ width:54px; height:54px; }
-  .plane.p14 .plane-fill{ fill:var(--turquoise-deep); }
-  .plane.p15{
-    offset-path:path("M-45,539 A39,39 0 0 1 33,539 A39,39 0 0 1 -45,539 A243,172 159 0 1 409,365 A243,172 159 0 1 -45,539 Z");
-    animation:fly 45s linear infinite; animation-delay:-28s;
-  }
-  .plane.p15 svg{ width:60px; height:60px; }
-  .plane.p15 .plane-fill{ fill:var(--pal-8); }
+      /* 5 more, relatively large - purple/turquoise family only, no black */
+      .plane.p11{
+        offset-path:path("M-96,140 A38,38 0 0 1 -21,140 A38,38 0 0 1 -96,140 A266,189 179 0 1 436,128 A266,189 179 0 1 -96,140 Z");
+        animation:fly 49s linear infinite; animation-delay:-6s;
+      }
+      .plane.p11 svg{ width:58px; height:58px; }
+      .plane.p11 .plane-fill{ fill:var(--pal-1); }
+      .plane.p12{
+        offset-path:path("M179,1037 A28,28 0 0 1 235,1037 A28,28 0 0 1 179,1037 A263,151 83 0 1 115,514 A263,151 83 0 1 179,1037 Z");
+        animation:fly 41s linear infinite; animation-delay:-24s;
+      }
+      .plane.p12 svg{ width:52px; height:52px; }
+      .plane.p12 .plane-fill{ fill:var(--pal-6); }
+      .plane.p13{
+        offset-path:path("M720,635 A31,31 0 0 1 783,635 A31,31 0 0 1 720,635 A271,158 45 0 1 334,254 A271,158 45 0 1 720,635 Z");
+        animation:fly 37s linear infinite; animation-delay:-13s;
+      }
+      .plane.p13 svg{ width:62px; height:62px; }
+      .plane.p13 .plane-fill{ fill:var(--pal-3); }
+      .plane.p14{
+        offset-path:path("M673,223 A37,37 0 0 1 748,223 A37,37 0 0 1 673,223 A246,183 159 0 1 1132,47 A246,183 159 0 1 673,223 Z");
+        animation:fly 53s linear infinite; animation-delay:-33s;
+      }
+      .plane.p14 svg{ width:54px; height:54px; }
+      .plane.p14 .plane-fill{ fill:var(--turquoise-deep); }
+      .plane.p15{
+        offset-path:path("M-45,539 A39,39 0 0 1 33,539 A39,39 0 0 1 -45,539 A243,172 159 0 1 409,365 A243,172 159 0 1 -45,539 Z");
+        animation:fly 45s linear infinite; animation-delay:-28s;
+      }
+      .plane.p15 svg{ width:60px; height:60px; }
+      .plane.p15 .plane-fill{ fill:var(--pal-8); }
 
-  /* the 15 paths above are authored on a 1600x900 landscape reference canvas
-     - on a real phone (roughly 375-430 wide, portrait) only a thin vertical
-     slice of that canvas is ever on screen, so almost every plane sits
-     off-canvas at all times. This is a second, independent set of paths on
-     a portrait ~390x820 reference instead, swapped in below this width -
-     same construction as the desktop set (grid-anchored ellipses + a small
-     decorative loop) but sized for a phone screen. Plane sizes also shrink
-     a bit to stay in proportion with the smaller canvas. */
-  @media(max-width:560px){
-    /* the mobile loops are ~35-40% the size of the desktop ones (a small
-       canvas needs a small loop), but they kept the desktop's animation
-       duration - same distance-per-loop math at the same duration means a
-       much smaller loop moves far fewer real pixels per second, which is
-       exactly why this read as crawling instead of flying. Cutting each
-       plane's duration to roughly match its shrunk loop size (~40% of the
-       original) restores the same apparent speed as desktop. */
-    .plane.p1{ offset-path:path("M268,568 A18,18 0 0 1 303,568 A18,18 0 0 1 268,568 A79,96 8 0 1 110,547 A79,96 8 0 1 268,568 Z"); }
-    .plane.p1 svg{ width:38px; height:38px; }
-    .plane.p1{ animation-duration:17s; }
-    .plane.p2{ offset-path:path("M399,258 A15,15 0 0 1 429,258 A15,15 0 0 1 399,258 A73,80 3 0 1 253,251 A73,80 3 0 1 399,258 Z"); }
-    .plane.p2 svg{ width:28px; height:28px; }
-    .plane.p2{ animation-duration:20s; }
-    .plane.p3{ offset-path:path("M72,143 A14,14 0 0 1 100,143 A14,14 0 0 1 72,143 A62,76 84 0 1 58,19 A62,76 84 0 1 72,143 Z"); }
-    .plane.p3 svg{ width:24px; height:24px; }
-    .plane.p3{ animation-duration:14s; }
-    .plane.p4{ offset-path:path("M169,155 A14,14 0 0 1 197,155 A14,14 0 0 1 169,155 A74,90 119 0 1 242,26 A74,90 119 0 1 169,155 Z"); }
-    .plane.p4 svg{ width:20px; height:20px; }
-    .plane.p4{ animation-duration:19s; }
-    .plane.p5{ offset-path:path("M20,652 A13,13 0 0 1 46,652 A13,13 0 0 1 20,652 A85,100 127 0 1 123,518 A85,100 127 0 1 20,652 Z"); }
-    .plane.p5 svg{ width:32px; height:32px; }
-    .plane.p5{ animation-duration:16s; }
-    .plane.p6{ offset-path:path("M204,298 A17,17 0 0 1 238,298 A17,17 0 0 1 204,298 A57,98 72 0 1 169,189 A57,98 72 0 1 204,298 Z"); }
-    .plane.p6 svg{ width:18px; height:18px; }
-    .plane.p6{ animation-duration:23s; }
-    .plane.p7{ offset-path:path("M138,473 A17,17 0 0 1 173,473 A17,17 0 0 1 138,473 A80,75 38 0 1 11,375 A80,75 38 0 1 138,473 Z"); }
-    .plane.p7 svg{ width:26px; height:26px; }
-    .plane.p7{ animation-duration:13s; }
-    .plane.p8{ offset-path:path("M285,166 A16,16 0 0 1 318,166 A16,16 0 0 1 285,166 A67,77 113 0 1 338,43 A67,77 113 0 1 285,166 Z"); }
-    .plane.p8 svg{ width:15px; height:15px; }
-    .plane.p8{ animation-duration:18s; }
-    .plane.p9{ offset-path:path("M24,282 A12,12 0 0 1 48,282 A12,12 0 0 1 24,282 A65,104 136 0 1 118,193 A65,104 136 0 1 24,282 Z"); }
-    .plane.p9 svg{ width:33px; height:33px; }
-    .plane.p9{ animation-duration:12s; }
-    .plane.p10{ offset-path:path("M119,738 A15,15 0 0 1 148,738 A15,15 0 0 1 119,738 A57,99 32 0 1 22,678 A57,99 32 0 1 119,738 Z"); }
-    .plane.p10 svg{ width:22px; height:22px; }
-    .plane.p10{ animation-duration:14s; }
-    .plane.p11{ offset-path:path("M277,630 A12,12 0 0 1 300,630 A12,12 0 0 1 277,630 A77,79 116 0 1 344,491 A77,79 116 0 1 277,630 Z"); }
-    .plane.p11 svg{ width:39px; height:39px; }
-    .plane.p11{ animation-duration:20s; }
-    .plane.p12{ offset-path:path("M258,748 A13,13 0 0 1 284,748 A13,13 0 0 1 258,748 A63,104 145 0 1 361,675 A63,104 145 0 1 258,748 Z"); }
-    .plane.p12 svg{ width:35px; height:35px; }
-    .plane.p12{ animation-duration:16s; }
-    .plane.p13{ offset-path:path("M295,462 A12,12 0 0 1 318,462 A12,12 0 0 1 295,462 A67,101 116 0 1 352,341 A67,101 116 0 1 295,462 Z"); }
-    .plane.p13 svg{ width:42px; height:42px; }
-    .plane.p13{ animation-duration:15s; }
-    .plane.p14{ offset-path:path("M242,765 A13,13 0 0 1 268,765 A13,13 0 0 1 242,765 A63,98 59 0 1 178,657 A63,98 59 0 1 242,765 Z"); }
-    .plane.p14 svg{ width:36px; height:36px; }
-    .plane.p14{ animation-duration:21s; }
-    .plane.p15{ offset-path:path("M160,467 A14,14 0 0 1 187,467 A14,14 0 0 1 160,467 A72,82 108 0 1 205,329 A72,82 108 0 1 160,467 Z"); }
-    .plane.p15 svg{ width:40px; height:40px; }
-    .plane.p15{ animation-duration:18s; }
-  }
+      /* the 15 paths above are authored on a 1600x900 landscape reference canvas
+         - on a real phone (roughly 375-430 wide, portrait) only a thin vertical
+         slice of that canvas is ever on screen, so almost every plane sits
+         off-canvas at all times. This is a second, independent set of paths on
+         a portrait ~390x820 reference instead, swapped in below this width -
+         same construction as the desktop set (grid-anchored ellipses + a small
+         decorative loop) but sized for a phone screen. Plane sizes also shrink
+         a bit to stay in proportion with the smaller canvas. */
+      @media(max-width:560px){
+        /* the mobile loops are ~35-40% the size of the desktop ones (a small
+           canvas needs a small loop), but they kept the desktop's animation
+           duration - same distance-per-loop math at the same duration means a
+           much smaller loop moves far fewer real pixels per second, which is
+           exactly why this read as crawling instead of flying. Cutting each
+           plane's duration to roughly match its shrunk loop size (~40% of the
+           original) restores the same apparent speed as desktop. */
+        .plane.p1{ offset-path:path("M268,568 A18,18 0 0 1 303,568 A18,18 0 0 1 268,568 A79,96 8 0 1 110,547 A79,96 8 0 1 268,568 Z"); }
+        .plane.p1 svg{ width:38px; height:38px; }
+        .plane.p1{ animation-duration:17s; }
+        .plane.p2{ offset-path:path("M399,258 A15,15 0 0 1 429,258 A15,15 0 0 1 399,258 A73,80 3 0 1 253,251 A73,80 3 0 1 399,258 Z"); }
+        .plane.p2 svg{ width:28px; height:28px; }
+        .plane.p2{ animation-duration:20s; }
+        .plane.p3{ offset-path:path("M72,143 A14,14 0 0 1 100,143 A14,14 0 0 1 72,143 A62,76 84 0 1 58,19 A62,76 84 0 1 72,143 Z"); }
+        .plane.p3 svg{ width:24px; height:24px; }
+        .plane.p3{ animation-duration:14s; }
+        .plane.p4{ offset-path:path("M169,155 A14,14 0 0 1 197,155 A14,14 0 0 1 169,155 A74,90 119 0 1 242,26 A74,90 119 0 1 169,155 Z"); }
+        .plane.p4 svg{ width:20px; height:20px; }
+        .plane.p4{ animation-duration:19s; }
+        .plane.p5{ offset-path:path("M20,652 A13,13 0 0 1 46,652 A13,13 0 0 1 20,652 A85,100 127 0 1 123,518 A85,100 127 0 1 20,652 Z"); }
+        .plane.p5 svg{ width:32px; height:32px; }
+        .plane.p5{ animation-duration:16s; }
+        .plane.p6{ offset-path:path("M204,298 A17,17 0 0 1 238,298 A17,17 0 0 1 204,298 A57,98 72 0 1 169,189 A57,98 72 0 1 204,298 Z"); }
+        .plane.p6 svg{ width:18px; height:18px; }
+        .plane.p6{ animation-duration:23s; }
+        .plane.p7{ offset-path:path("M138,473 A17,17 0 0 1 173,473 A17,17 0 0 1 138,473 A80,75 38 0 1 11,375 A80,75 38 0 1 138,473 Z"); }
+        .plane.p7 svg{ width:26px; height:26px; }
+        .plane.p7{ animation-duration:13s; }
+        .plane.p8{ offset-path:path("M285,166 A16,16 0 0 1 318,166 A16,16 0 0 1 285,166 A67,77 113 0 1 338,43 A67,77 113 0 1 285,166 Z"); }
+        .plane.p8 svg{ width:15px; height:15px; }
+        .plane.p8{ animation-duration:18s; }
+        .plane.p9{ offset-path:path("M24,282 A12,12 0 0 1 48,282 A12,12 0 0 1 24,282 A65,104 136 0 1 118,193 A65,104 136 0 1 24,282 Z"); }
+        .plane.p9 svg{ width:33px; height:33px; }
+        .plane.p9{ animation-duration:12s; }
+        .plane.p10{ offset-path:path("M119,738 A15,15 0 0 1 148,738 A15,15 0 0 1 119,738 A57,99 32 0 1 22,678 A57,99 32 0 1 119,738 Z"); }
+        .plane.p10 svg{ width:22px; height:22px; }
+        .plane.p10{ animation-duration:14s; }
+        .plane.p11{ offset-path:path("M277,630 A12,12 0 0 1 300,630 A12,12 0 0 1 277,630 A77,79 116 0 1 344,491 A77,79 116 0 1 277,630 Z"); }
+        .plane.p11 svg{ width:39px; height:39px; }
+        .plane.p11{ animation-duration:20s; }
+        .plane.p12{ offset-path:path("M258,748 A13,13 0 0 1 284,748 A13,13 0 0 1 258,748 A63,104 145 0 1 361,675 A63,104 145 0 1 258,748 Z"); }
+        .plane.p12 svg{ width:35px; height:35px; }
+        .plane.p12{ animation-duration:16s; }
+        .plane.p13{ offset-path:path("M295,462 A12,12 0 0 1 318,462 A12,12 0 0 1 295,462 A67,101 116 0 1 352,341 A67,101 116 0 1 295,462 Z"); }
+        .plane.p13 svg{ width:42px; height:42px; }
+        .plane.p13{ animation-duration:15s; }
+        .plane.p14{ offset-path:path("M242,765 A13,13 0 0 1 268,765 A13,13 0 0 1 242,765 A63,98 59 0 1 178,657 A63,98 59 0 1 242,765 Z"); }
+        .plane.p14 svg{ width:36px; height:36px; }
+        .plane.p14{ animation-duration:21s; }
+        .plane.p15{ offset-path:path("M160,467 A14,14 0 0 1 187,467 A14,14 0 0 1 160,467 A72,82 108 0 1 205,329 A72,82 108 0 1 160,467 Z"); }
+        .plane.p15 svg{ width:40px; height:40px; }
+        .plane.p15{ animation-duration:18s; }
+      }
 
-  @keyframes fly{ to{ offset-distance:100%; } }
+      @keyframes fly{ to{ offset-distance:100%; } }
 
-  @supports not (offset-path: none){
-    .plane{ display:none; }        /* no motion-path support - hide rather than show 3 stuck icons */
-  }
-  @media (prefers-reduced-motion: reduce){
-    .plane{ animation:none !important; opacity:.35; }
-  }
+      @supports not (offset-path: none){
+        .plane{ display:none; }        /* no motion-path support - hide rather than show 3 stuck icons */
+      }
+      @media (prefers-reduced-motion: reduce){
+        .plane{ animation:none !important; opacity:.35; }
+      }
 
-  /* ---------- hero ---------- */
-  #hero{
-    text-align:center; padding:110px 0 70px; position:relative;
-  }
+      /* ---------- hero ---------- */
+      #hero{
+        text-align:center; padding:110px 0 70px; position:relative;
+      }
 
-  /* glass content card, floating above the planes */
-  #hero .glass{
-    position:relative; z-index:1;
-    background:rgba(255,255,255,0.55);
-    backdrop-filter:blur(20px) saturate(160%);
-    -webkit-backdrop-filter:blur(20px) saturate(160%);
-    border:1px solid rgba(255,255,255,0.65);
-    border-radius:28px;
-    padding:52px 40px;
-    box-shadow:0 24px 60px -28px rgba(18,60,61,0.28);
-  }
-  @supports not (backdrop-filter: blur(1px)){
-    #hero .glass{ background:rgba(255,255,255,0.88); }
-  }
-  #hero h1{
-    font-size:clamp(2.4rem, 7vw, 3.6rem); line-height:1.05; color:var(--ink); margin-bottom:16px;
-    font-style:italic;
-  }
-  #hero h1 em{ color:var(--pal-2); }
-  #hero .sub{ color:var(--ink-dim); font-size:1.05rem; max-width:480px; margin:0 auto; }
+      /* glass content card, floating above the planes */
+      #hero .glass{
+        position:relative; z-index:1;
+        background:rgba(255,255,255,0.55);
+        backdrop-filter:blur(20px) saturate(160%);
+        -webkit-backdrop-filter:blur(20px) saturate(160%);
+        border:1px solid rgba(255,255,255,0.65);
+        border-radius:28px;
+        padding:52px 40px;
+        box-shadow:0 24px 60px -28px rgba(18,60,61,0.28);
+      }
+      @supports not (backdrop-filter: blur(1px)){
+        #hero .glass{ background:rgba(255,255,255,0.88); }
+      }
+      #hero h1{
+        font-size:clamp(2.4rem, 7vw, 3.6rem); line-height:1.05; color:var(--ink); margin-bottom:16px;
+        font-style:italic;
+      }
+      #hero h1 em{ color:var(--pal-2); }
+      #hero .sub{ color:var(--ink-dim); font-size:1.05rem; max-width:480px; margin:0 auto; }
 
-  .steps{
-    display:flex; justify-content:center; align-items:center; gap:6px; margin-top:44px;
-    flex-wrap:nowrap; overflow-x:auto; -ms-overflow-style:none; scrollbar-width:none;
-    /* bleed past the glass card's own side padding so the row gets the full
-       .wrap width to fit on one line, instead of being squeezed by it */
-    margin-left:-40px; margin-right:-40px; padding:2px 12px;
-  }
-  .steps::-webkit-scrollbar{ display:none; }
-  /* no own card/chip around each step (was: white pill + border + shadow,
-     nested inside the .glass card) — just the number + label sitting directly
-     on the glass, so there's one card here, not four */
-  .steps .step{
-    display:flex; align-items:center; gap:8px; flex:none; padding:8px 2px;
-  }
-  .steps .step b{
-    font-family:'Secular One',sans-serif; font-weight:400; font-size:0.84rem;
-    width:20px; height:20px; border-radius:50%; background:var(--turquoise-bright);
-    color:var(--ink); display:flex; align-items:center; justify-content:center; flex:none;
-  }
-  .steps .step span{ font-size:0.92rem; color:var(--ink-dim); white-space:nowrap; }
-  .steps .arrow{ color:var(--ink-dim); opacity:.4; font-size:1rem; align-self:center; flex:none; }
-  /* the horizontal row (with side-scroll as a fallback) doesn't actually fit
-     on a real phone width even with the arrows removed - the row's natural
-     width exceeds the viewport, and a static scroll position of 0 in this
-     RTL row hides step 3 off to the left instead of scrolling to reveal it.
-     A vertical stack has no such width budget to run out of. */
-  @media(max-width:560px){
-    /* a real connected timeline, not a list: one line running through the
-       three circles top-to-bottom. The line's position only depends on the
-       circle's fixed size and the fact every .step packs to the same edge
-       (flex-start, i.e. the right in RTL) regardless of label length - so a
-       single absolutely-positioned line behind everything lines up with all
-       three without measuring each row. The whole widget gets a fixed width
-       and auto side margins so it sits centered in the card instead of
-       pinned to one edge. */
-    .steps .arrow{ display:none; }
-    .steps{
-      position:relative; flex-direction:column; flex-wrap:nowrap; overflow:visible;
-      align-items:stretch; width:220px; margin:38px auto 6px; padding:0; gap:24px;
-    }
-    .steps::before{
-      content:''; position:absolute; top:15px; bottom:15px; right:14px; width:2px;
-      background:linear-gradient(to bottom, var(--turquoise-bright), var(--pal-2));
-      border-radius:2px;
-    }
-    .steps .step{ position:relative; z-index:1; padding:0; }
-    .steps .step b{
-      width:30px; height:30px; font-size:0.94rem;
-      box-shadow:0 5px 12px -4px rgba(35,155,199,0.6);
-    }
-    .steps .step span{ font-size:0.96rem; font-weight:500; }
-  }
+      .steps{
+        display:flex; justify-content:center; align-items:center; gap:6px; margin-top:44px;
+        flex-wrap:nowrap; overflow-x:auto; -ms-overflow-style:none; scrollbar-width:none;
+        /* bleed past the glass card's own side padding so the row gets the full
+           .wrap width to fit on one line, instead of being squeezed by it */
+        margin-left:-40px; margin-right:-40px; padding:2px 12px;
+      }
+      .steps::-webkit-scrollbar{ display:none; }
+      /* no own card/chip around each step (was: white pill + border + shadow,
+         nested inside the .glass card) — just the number + label sitting directly
+         on the glass, so there's one card here, not four */
+      .steps .step{
+        display:flex; align-items:center; gap:8px; flex:none; padding:8px 2px;
+      }
+      .steps .step b{
+        font-family:'Secular One',sans-serif; font-weight:400; font-size:0.84rem;
+        width:20px; height:20px; border-radius:50%; background:var(--turquoise-bright);
+        color:var(--ink); display:flex; align-items:center; justify-content:center; flex:none;
+      }
+      .steps .step span{ font-size:0.92rem; color:var(--ink-dim); white-space:nowrap; }
+      .steps .arrow{ color:var(--ink-dim); opacity:.4; font-size:1rem; align-self:center; flex:none; }
+      /* the horizontal row (with side-scroll as a fallback) doesn't actually fit
+         on a real phone width even with the arrows removed - the row's natural
+         width exceeds the viewport, and a static scroll position of 0 in this
+         RTL row hides step 3 off to the left instead of scrolling to reveal it.
+         A vertical stack has no such width budget to run out of. */
+      @media(max-width:560px){
+        /* a real connected timeline, not a list: one line running through the
+           three circles top-to-bottom. The line's position only depends on the
+           circle's fixed size and the fact every .step packs to the same edge
+           (flex-start, i.e. the right in RTL) regardless of label length - so a
+           single absolutely-positioned line behind everything lines up with all
+           three without measuring each row. The whole widget gets a fixed width
+           and auto side margins so it sits centered in the card instead of
+           pinned to one edge. */
+        .steps .arrow{ display:none; }
+        .steps{
+          position:relative; flex-direction:column; flex-wrap:nowrap; overflow:visible;
+          align-items:stretch; width:220px; margin:38px auto 6px; padding:0; gap:24px;
+        }
+        .steps::before{
+          content:''; position:absolute; top:15px; bottom:15px; right:14px; width:2px;
+          background:linear-gradient(to bottom, var(--turquoise-bright), var(--pal-2));
+          border-radius:2px;
+        }
+        .steps .step{ position:relative; z-index:1; padding:0; }
+        .steps .step b{
+          width:30px; height:30px; font-size:0.94rem;
+          box-shadow:0 5px 12px -4px rgba(35,155,199,0.6);
+        }
+        .steps .step span{ font-size:0.96rem; font-weight:500; }
+      }
 
-  /* ---------- form card ---------- */
-  main{ padding:8px 0 90px; }
-  .card{
-    background:var(--bg-2); border-radius:20px; box-shadow:var(--shadow);
-    border:1px solid var(--line); padding:36px 32px; margin-top:-28px; position:relative; z-index:2;
-  }
-  label{ display:block; font-weight:600; font-size:0.92rem; margin:22px 0 8px; color:var(--ink); }
-  label:first-child{ margin-top:0; }
-  .hint{ color:var(--muted); font-size:0.82rem; margin-top:6px; }
-  textarea, input[type=text]{
-    width:100%; padding:13px 14px; border:1px solid var(--line); border-radius:12px;
-    font:inherit; font-size:0.96rem; color:var(--ink); background:var(--bg-0);
-    box-sizing:border-box; transition:border-color .15s, box-shadow .15s;
-  }
-  textarea{ min-height:120px; resize:vertical; }
-  textarea:focus, input[type=text]:focus{
-    outline:none; border-color:var(--turquoise); box-shadow:0 0 0 3px rgba(35,155,199,0.18);
-  }
-  input[type=file]{
-    width:100%; font:inherit; font-size:0.88rem; color:var(--muted);
-    padding:10px 4px;
-  }
-  input[type=file]::file-selector-button{
-    font:inherit; font-weight:600; font-size:0.86rem; color:var(--turquoise-deep);
-    background:var(--bg-3); border:0; border-radius:9px; padding:9px 16px;
-    margin-inline-end:12px; cursor:pointer; transition:background .15s;
-  }
-  input[type=file]::file-selector-button:hover{ background:#D3F5E9; }
+      /* ---------- form card ---------- */
+      main{ padding:8px 0 90px; }
+      .card{
+        background:var(--bg-2); border-radius:20px; box-shadow:var(--shadow);
+        border:1px solid var(--line); padding:36px 32px; margin-top:-28px; position:relative; z-index:2;
+      }
+      label{ display:block; font-weight:600; font-size:0.92rem; margin:22px 0 8px; color:var(--ink); }
+      label:first-child{ margin-top:0; }
+      .hint{ color:var(--muted); font-size:0.82rem; margin-top:6px; }
+      textarea, input[type=text]{
+        width:100%; padding:13px 14px; border:1px solid var(--line); border-radius:12px;
+        font:inherit; font-size:0.96rem; color:var(--ink); background:var(--bg-0);
+        box-sizing:border-box; transition:border-color .15s, box-shadow .15s;
+      }
+      textarea{ min-height:120px; resize:vertical; }
+      textarea:focus, input[type=text]:focus{
+        outline:none; border-color:var(--turquoise); box-shadow:0 0 0 3px rgba(35,155,199,0.18);
+      }
+      input[type=file]{
+        width:100%; font:inherit; font-size:0.88rem; color:var(--muted);
+        padding:10px 4px;
+      }
+      input[type=file]::file-selector-button{
+        font:inherit; font-weight:600; font-size:0.86rem; color:var(--turquoise-deep);
+        background:var(--bg-3); border:0; border-radius:9px; padding:9px 16px;
+        margin-inline-end:12px; cursor:pointer; transition:background .15s;
+      }
+      input[type=file]::file-selector-button:hover{ background:#D3F5E9; }
 
-  button[type=submit]{
-    margin-top:28px; width:100%; background:var(--turquoise-bright); color:var(--ink); border:0;
-    border-radius:12px; padding:15px 22px; font:inherit; font-size:1rem; font-weight:700;
-    cursor:pointer; transition:background .15s, transform .1s;
-    box-shadow:0 14px 30px -14px rgba(128,255,219,0.65);
-  }
-  button[type=submit]:hover{ background:var(--turquoise-bright-hover); }
-  button[type=submit]:active{ transform:translateY(1px); }
+      button[type=submit]{
+        margin-top:28px; width:100%; background:var(--turquoise-bright); color:var(--ink); border:0;
+        border-radius:12px; padding:15px 22px; font:inherit; font-size:1rem; font-weight:700;
+        cursor:pointer; transition:background .15s, transform .1s;
+        box-shadow:0 14px 30px -14px rgba(128,255,219,0.65);
+      }
+      button[type=submit]:hover{ background:var(--turquoise-bright-hover); }
+      button[type=submit]:active{ transform:translateY(1px); }
 
-  .btn-photos, .file-btn{
-    display:flex; align-items:center; gap:10px; width:100%; background:var(--bg-1);
-    border:1px dashed var(--line); border-radius:12px; padding:13px 16px; font:inherit;
-    font-size:0.92rem; font-weight:600; color:var(--sea-deep); cursor:pointer;
-    transition:background .15s, border-color .15s; box-sizing:border-box;
-  }
-  .btn-photos[hidden]{ display:none; }  /* explicit display:flex above would otherwise beat [hidden] */
-  .btn-photos:hover:not(:disabled), .file-btn:hover{ background:var(--bg-3); border-color:var(--turquoise); }
-  .btn-photos:disabled{ cursor:default; opacity:.75; }
-  .btn-photos .ic, .file-btn .ic{ font-size:1.05rem; }
-  .file-btn{ margin:0; }
+      .btn-photos, .file-btn{
+        display:flex; align-items:center; gap:10px; width:100%; background:var(--bg-1);
+        border:1px dashed var(--line); border-radius:12px; padding:13px 16px; font:inherit;
+        font-size:0.92rem; font-weight:600; color:var(--sea-deep); cursor:pointer;
+        transition:background .15s, border-color .15s; box-sizing:border-box;
+      }
+      .btn-photos[hidden]{ display:none; }  /* explicit display:flex above would otherwise beat [hidden] */
+      .btn-photos:hover:not(:disabled), .file-btn:hover{ background:var(--bg-3); border-color:var(--turquoise); }
+      .btn-photos:disabled{ cursor:default; opacity:.75; }
+      .btn-photos .ic, .file-btn .ic{ font-size:1.05rem; }
+      .file-btn{ margin:0; }
 
-  /* ---------- photo-picker status: a clear picking/confirmed state, not a
-     permanently-disabled button with no way back if the Google tab gets closed ---------- */
-  .photos-status{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:12px; }
-  .photos-status .badge{
-    display:inline-flex; align-items:center; gap:6px; font-size:0.86rem; font-weight:700;
-    color:var(--turquoise-deep); background:var(--bg-3); border-radius:99px; padding:7px 16px;
-  }
-  .photos-status .link-btn{
-    background:none; border:0; padding:2px; font:inherit; font-size:0.82rem; font-weight:600;
-    color:var(--muted); text-decoration:underline; cursor:pointer;
-  }
-  .photos-status .link-btn:hover{ color:var(--turquoise-deep); }
-  .photos-status .btn, .photos-status .btn.ghost{ padding:9px 16px; font-size:0.84rem; }
+      /* ---------- photo-picker status: a clear picking/confirmed state, not a
+         permanently-disabled button with no way back if the Google tab gets closed ---------- */
+      .photos-status{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:12px; }
+      .photos-status .badge{
+        display:inline-flex; align-items:center; gap:6px; font-size:0.86rem; font-weight:700;
+        color:var(--turquoise-deep); background:var(--bg-3); border-radius:99px; padding:7px 16px;
+      }
+      .photos-status .link-btn{
+        background:none; border:0; padding:2px; font:inherit; font-size:0.82rem; font-weight:600;
+        color:var(--muted); text-decoration:underline; cursor:pointer;
+      }
+      .photos-status .link-btn:hover{ color:var(--turquoise-deep); }
+      .photos-status .btn, .photos-status .btn.ghost{ padding:9px 16px; font-size:0.84rem; }
 
-  .btn{
-    font:inherit; font-size:0.84rem; font-weight:700; border-radius:11px; padding:10px 16px;
-    cursor:pointer; text-decoration:none; display:inline-block; border:0; white-space:nowrap;
-    background:var(--turquoise-bright); color:var(--ink); transition:background .15s, transform .1s;
-  }
-  .btn:hover{ background:var(--turquoise-bright-hover); }
-  .btn:active{ transform:translateY(1px); }
-  .btn.ghost{ background:var(--bg-1); color:var(--turquoise-deep); border:1px solid var(--line); }
-  .btn.ghost:hover{ background:var(--bg-3); border-color:var(--turquoise); }
+      .btn{
+        font:inherit; font-size:0.84rem; font-weight:700; border-radius:11px; padding:10px 16px;
+        cursor:pointer; text-decoration:none; display:inline-block; border:0; white-space:nowrap;
+        background:var(--turquoise-bright); color:var(--ink); transition:background .15s, transform .1s;
+      }
+      .btn:hover{ background:var(--turquoise-bright-hover); }
+      .btn:active{ transform:translateY(1px); }
+      .btn.ghost{ background:var(--bg-1); color:var(--turquoise-deep); border:1px solid var(--line); }
+      .btn.ghost:hover{ background:var(--bg-3); border-color:var(--turquoise); }
 
-  /* ---------- a small in-page dialog, instead of the browser's native confirm() ---------- */
-  .modal-overlay{
-    position:fixed; inset:0; background:rgba(18,60,61,0.35); backdrop-filter:blur(2px);
-    display:flex; align-items:center; justify-content:center; z-index:50; padding:20px;
-  }
-  .modal-overlay[hidden]{ display:none; }
-  .modal-box{
-    background:var(--bg-2); border-radius:18px; box-shadow:var(--shadow);
-    padding:28px 26px; max-width:380px; width:100%; text-align:center;
-  }
-  .modal-box p{ color:var(--ink); font-size:0.98rem; margin-bottom:22px; line-height:1.6; }
-  .modal-actions{ display:flex; gap:10px; justify-content:center; }
-  .btn.danger{ background:var(--err); color:#fff; }
-  .btn.danger:hover{ filter:brightness(0.92); }
-  .file-btn.chosen{ border-style:solid; border-color:var(--turquoise); color:var(--turquoise-deep); background:var(--bg-3); }
-  .err-banner{
-    display:none; background:var(--err-bg); color:var(--err); border-radius:10px;
-    padding:11px 14px; font-size:0.86rem; margin-top:18px;
-  }
+      /* ---------- a small in-page dialog, instead of the browser's native confirm() ---------- */
+      .modal-overlay{
+        position:fixed; inset:0; background:rgba(18,60,61,0.35); backdrop-filter:blur(2px);
+        display:flex; align-items:center; justify-content:center; z-index:50; padding:20px;
+      }
+      .modal-overlay[hidden]{ display:none; }
+      .modal-box{
+        background:var(--bg-2); border-radius:18px; box-shadow:var(--shadow);
+        padding:28px 26px; max-width:380px; width:100%; text-align:center;
+      }
+      .modal-box p{ color:var(--ink); font-size:0.98rem; margin-bottom:22px; line-height:1.6; }
+      .modal-actions{ display:flex; gap:10px; justify-content:center; }
+      .btn.danger{ background:var(--err); color:#fff; }
+      .btn.danger:hover{ filter:brightness(0.92); }
+      .file-btn.chosen{ border-style:solid; border-color:var(--turquoise); color:var(--turquoise-deep); background:var(--bg-3); }
+      .err-banner{
+        display:none; background:var(--err-bg); color:var(--err); border-radius:10px;
+        padding:11px 14px; font-size:0.86rem; margin-top:18px;
+      }
 
-  /* ---------- trip list ---------- */
-  .trips{ margin-top:44px; }
-  .trips h2{
-    font-family:'Assistant',sans-serif; font-weight:700; font-size:0.98rem; color:var(--ink-dim);
-    margin-bottom:14px; padding:0 4px;
-  }
-  .trip-card{
-    display:flex; align-items:center; gap:6px; background:var(--bg-2); border:1px solid var(--line);
-    border-radius:14px; padding:15px 12px 15px 18px; margin-bottom:10px;
-    transition:border-color .15s, transform .1s; box-shadow:0 6px 16px -14px rgba(18,60,61,0.24);
-  }
-  .trip-card:hover{ border-color:var(--turquoise); transform:translateY(-1px); }
-  .trip-card .t-link{
-    display:flex; align-items:center; gap:14px; flex:1; min-width:0; text-decoration:none; color:inherit;
-  }
-  .trip-card .t{ flex:1; min-width:0; }
-  .trip-card .t .desc{
-    font-weight:600; font-size:0.94rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-  }
-  .trip-card .t .date{ font-size:0.78rem; color:var(--muted); margin-top:2px; }
-  .del-btn{
-    flex:none; display:flex; align-items:center; justify-content:center;
-    width:34px; height:34px; background:none; border:0; border-radius:9px;
-    font-size:1rem; color:var(--muted); cursor:pointer; transition:background .15s, color .15s;
-  }
-  .del-btn:hover{ background:var(--err-bg); color:var(--err); }
-  .del-btn:disabled{ opacity:.5; cursor:default; }
-  .pill{
-    flex:none; font-size:0.74rem; font-weight:700; padding:5px 12px; border-radius:99px;
-    white-space:nowrap;
-  }
-  .pill.ready{ background:var(--bg-3); color:var(--turquoise-deep); }
-  .pill.running, .pill.queued{ background:#DBF3F8; color:var(--sea-deep); }
-  .pill.error{ background:var(--err-bg); color:var(--err); }
-  .pill.running::before{
-    content:''; display:inline-block; width:6px; height:6px; border-radius:50%;
-    background:var(--sea); margin-inline-end:6px; animation:pulse 1.4s ease-in-out infinite;
-  }
-  @keyframes pulse{ 0%,100%{ opacity:.4; } 50%{ opacity:1; } }
+      /* ---------- trip list ---------- */
+      .trips{ margin-top:44px; }
+      .trips h2{
+        font-family:'Assistant',sans-serif; font-weight:700; font-size:0.98rem; color:var(--ink-dim);
+        margin-bottom:14px; padding:0 4px;
+      }
+      .trip-card{
+        display:flex; align-items:center; gap:6px; background:var(--bg-2); border:1px solid var(--line);
+        border-radius:14px; padding:15px 12px 15px 18px; margin-bottom:10px;
+        transition:border-color .15s, transform .1s; box-shadow:0 6px 16px -14px rgba(18,60,61,0.24);
+      }
+      .trip-card:hover{ border-color:var(--turquoise); transform:translateY(-1px); }
+      .trip-card .t-link{
+        display:flex; align-items:center; gap:14px; flex:1; min-width:0; text-decoration:none; color:inherit;
+      }
+      .trip-card .t{ flex:1; min-width:0; }
+      .trip-card .t .desc{
+        font-weight:600; font-size:0.94rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+      }
+      .trip-card .t .date{ font-size:0.78rem; color:var(--muted); margin-top:2px; }
+      .del-btn{
+        flex:none; display:flex; align-items:center; justify-content:center;
+        width:34px; height:34px; background:none; border:0; border-radius:9px;
+        font-size:1rem; color:var(--muted); cursor:pointer; transition:background .15s, color .15s;
+      }
+      .del-btn:hover{ background:var(--err-bg); color:var(--err); }
+      .del-btn:disabled{ opacity:.5; cursor:default; }
+      .pill{
+        flex:none; font-size:0.74rem; font-weight:700; padding:5px 12px; border-radius:99px;
+        white-space:nowrap;
+      }
+      .pill.ready{ background:var(--bg-3); color:var(--turquoise-deep); }
+      .pill.running, .pill.queued{ background:#DBF3F8; color:var(--sea-deep); }
+      .pill.error{ background:var(--err-bg); color:var(--err); }
+      .pill.running::before{
+        content:''; display:inline-block; width:6px; height:6px; border-radius:50%;
+        background:var(--sea); margin-inline-end:6px; animation:pulse 1.4s ease-in-out infinite;
+      }
+      @keyframes pulse{ 0%,100%{ opacity:.4; } 50%{ opacity:1; } }
 
-  footer{ text-align:center; padding:0 24px 60px; color:var(--muted); font-size:0.8rem; }
+      footer{ text-align:center; padding:0 24px 60px; color:var(--muted); font-size:0.8rem; }
 
-  /* ---------- account bar: guest state - one pill + a line below it,
-     fixed top-right, same corner the logged-in avatar uses ---------- */
-  .auth-corner{
-    position:relative; z-index:6; width:100%;
-    display:flex; flex-direction:column; align-items:center; gap:6px;
-    padding:18px 24px 0;
-  }
-  .auth-corner .auth-pill{
-    display:inline-block; white-space:nowrap; text-decoration:none;
-    background:rgba(255,255,255,0.75); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
-    border:1px solid var(--line); border-radius:99px; padding:9px 22px;
-    font-size:0.82rem; font-weight:700; color:var(--turquoise-deep);
-    box-shadow:0 6px 18px -12px rgba(18,60,61,0.25); transition:background .15s;
-  }
-  .auth-corner .auth-pill:hover{ background:var(--bg-3); }
-  .auth-corner .guest-hint{ font-size:0.72rem; color:var(--muted); text-align:center; line-height:1.4; max-width:220px; }
+      /* ---------- account bar: guest state - one pill + a line below it,
+         fixed top-right, same corner the logged-in avatar uses ---------- */
+      .auth-corner{
+        position:relative; z-index:6; width:100%;
+        display:flex; flex-direction:column; align-items:center; gap:6px;
+        padding:18px 24px 0;
+      }
+      .auth-corner .auth-pill{
+        display:inline-block; white-space:nowrap; text-decoration:none;
+        background:rgba(255,255,255,0.75); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+        border:1px solid var(--line); border-radius:99px; padding:9px 22px;
+        font-size:0.82rem; font-weight:700; color:var(--turquoise-deep);
+        box-shadow:0 6px 18px -12px rgba(18,60,61,0.25); transition:background .15s;
+      }
+      .auth-corner .auth-pill:hover{ background:var(--bg-3); }
+      .auth-corner .guest-hint{ font-size:0.72rem; color:var(--muted); text-align:center; line-height:1.4; max-width:220px; }
 
-  /* logged-in: a round avatar (first letter of the name) fixed top-right;
-     clicking it opens a small dropdown with "my trips" + logout */
-  .account-corner{ position:fixed; top:18px; right:18px; z-index:6; }
-  .account-corner .avatar{
-    width:44px; height:44px; border-radius:50%; background:var(--turquoise-bright);
-    color:var(--ink); font-family:'Secular One',sans-serif; font-size:1.15rem;
-    display:flex; align-items:center; justify-content:center; flex:none;
-    border:2px solid var(--bg-2); box-shadow:0 8px 18px -8px rgba(18,60,61,0.35);
-    cursor:pointer; padding:0; transition:transform .1s;
-  }
-  .account-corner .avatar:hover{ transform:translateY(1px); }
-  .account-corner .avatar[aria-expanded="true"]{ box-shadow:0 0 0 3px rgba(90,24,154,0.22); }
+      /* logged-in: a round avatar (first letter of the name) fixed top-right;
+         clicking it opens a small dropdown with "my trips" + logout */
+      .account-corner{ position:fixed; top:18px; right:18px; z-index:6; }
+      .account-corner .avatar{
+        width:44px; height:44px; border-radius:50%; background:var(--turquoise-bright);
+        color:var(--ink); font-family:'Secular One',sans-serif; font-size:1.15rem;
+        display:flex; align-items:center; justify-content:center; flex:none;
+        border:2px solid var(--bg-2); box-shadow:0 8px 18px -8px rgba(18,60,61,0.35);
+        cursor:pointer; padding:0; transition:transform .1s;
+      }
+      .account-corner .avatar:hover{ transform:translateY(1px); }
+      .account-corner .avatar[aria-expanded="true"]{ box-shadow:0 0 0 3px rgba(90,24,154,0.22); }
 
-  .account-menu{
-    position:absolute; top:calc(100% + 8px); right:0; min-width:150px;
-    background:rgba(255,255,255,0.85); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
-    border:1px solid var(--line); border-radius:14px; padding:6px;
-    box-shadow:0 16px 40px -16px rgba(18,60,61,0.35);
-    display:flex; flex-direction:column; gap:2px;
-  }
-  .account-menu[hidden]{ display:none; }
-  .account-menu .menu-item{
-    display:block; width:100%; text-align:right; background:none; border:0;
-    font:inherit; font-size:0.86rem; font-weight:600; color:var(--ink-dim);
-    padding:9px 12px; border-radius:9px; cursor:pointer; text-decoration:none;
-  }
-  .account-menu .menu-item:hover{ background:var(--bg-1); color:var(--turquoise-deep); }
-  .account-menu .menu-item.logout{ color:var(--pal-2); }
-  @media(max-width:480px){ .account-corner{ top:12px; right:12px; } .account-corner .avatar{ width:38px; height:38px; font-size:1rem; } }
-</style>
-</head>
-<body>
-
-  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
-    <defs>
-      <filter id="cloud-filter" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
-        <feTurbulence type="fractalNoise" baseFrequency="0.005 0.009" numOctaves="6" seed="11" stitchTiles="stitch" result="noise"/>
-        <feColorMatrix in="noise" type="luminanceToAlpha" result="alphaFromLum"/>
-        <feComponentTransfer in="alphaFromLum" result="contrast">
-          <feFuncA type="gamma" amplitude="1.8" exponent="2.2" offset="-0.15"/>
-        </feComponentTransfer>
-        <feColorMatrix in="contrast" type="matrix"
-          values="0 0 0 0 1
+      .account-menu{
+        position:absolute; top:calc(100% + 8px); right:0; min-width:150px;
+        background:rgba(255,255,255,0.85); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+        border:1px solid var(--line); border-radius:14px; padding:6px;
+        box-shadow:0 16px 40px -16px rgba(18,60,61,0.35);
+        display:flex; flex-direction:column; gap:2px;
+      }
+      .account-menu[hidden]{ display:none; }
+      .account-menu .menu-item{
+        display:block; width:100%; text-align:right; background:none; border:0;
+        font:inherit; font-size:0.86rem; font-weight:600; color:var(--ink-dim);
+        padding:9px 12px; border-radius:9px; cursor:pointer; text-decoration:none;
+      }
+      .account-menu .menu-item:hover{ background:var(--bg-1); color:var(--turquoise-deep); }
+      .account-menu .menu-item.logout{ color:var(--pal-2); }
+      @media(max-width:480px){ .account-corner{ top:12px; right:12px; } .account-corner .avatar{ width:38px; height:38px; font-size:1rem; } }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <filter
+          id="cloud-filter"
+          x="-20%"
+          y="-20%"
+          width="140%"
+          height="140%"
+          color-interpolation-filters="sRGB"
+        >
+          <feTurbulence
+            type="fractalNoise"
+            baseFrequency="0.005 0.009"
+            numOctaves="6"
+            seed="11"
+            stitchTiles="stitch"
+            result="noise"
+          />
+          <feColorMatrix in="noise" type="luminanceToAlpha" result="alphaFromLum" />
+          <feComponentTransfer in="alphaFromLum" result="contrast">
+            <feFuncA type="gamma" amplitude="1.8" exponent="2.2" offset="-0.15" />
+          </feComponentTransfer>
+          <feColorMatrix
+            in="contrast"
+            type="matrix"
+            values="0 0 0 0 1
                   0 0 0 0 1
                   0 0 0 0 1
-                  0 0 0 1 0" result="white-clouds"/>
-        <feGaussianBlur in="white-clouds" stdDeviation="0.6"/>
-      </filter>
-    </defs>
-  </svg>
+                  0 0 0 1 0"
+            result="white-clouds"
+          />
+          <feGaussianBlur in="white-clouds" stdDeviation="0.6" />
+        </filter>
+      </defs>
+    </svg>
 
-  {{ACCOUNT}}
+    {{ACCOUNT}}
 
-  <div class="sky" aria-hidden="true">
-    <div class="blob b1"></div>
-    <div class="blob b2"></div>
-    <div class="blob b3"></div>
-    <div class="blob b4"></div>
-    <div class="cloud-layer"></div>
-    <div class="plane p1"><svg viewBox="-14 -14 28 28"><path class="plane-fill" d="M13,0 L4.5,-1.5 L2.5,-1.8 L-2.5,-10 L-4,-10 L-3.5,-2 L-8,-1.6 L-9,-4.6 L-10.4,-4.6 L-10.8,-1.3 L-12,-0.8 L-12,0.8 L-10.8,1.3 L-10.4,4.6 L-9,4.6 L-8,1.6 L-3.5,2 L-4,10 L-2.5,10 L2.5,1.8 L4.5,1.5 Z"/></svg></div>
-    <div class="plane p2"><svg viewBox="-14 -14 28 28"><path class="plane-fill" d="M13,0 L4.5,-1.5 L2.5,-1.8 L-2.5,-10 L-4,-10 L-3.5,-2 L-8,-1.6 L-9,-4.6 L-10.4,-4.6 L-10.8,-1.3 L-12,-0.8 L-12,0.8 L-10.8,1.3 L-10.4,4.6 L-9,4.6 L-8,1.6 L-3.5,2 L-4,10 L-2.5,10 L2.5,1.8 L4.5,1.5 Z"/></svg></div>
-    <div class="plane p3"><svg viewBox="-14 -14 28 28"><path class="plane-fill" d="M13,0 L4.5,-1.5 L2.5,-1.8 L-2.5,-10 L-4,-10 L-3.5,-2 L-8,-1.6 L-9,-4.6 L-10.4,-4.6 L-10.8,-1.3 L-12,-0.8 L-12,0.8 L-10.8,1.3 L-10.4,4.6 L-9,4.6 L-8,1.6 L-3.5,2 L-4,10 L-2.5,10 L2.5,1.8 L4.5,1.5 Z"/></svg></div>
-    <div class="plane p4"><svg viewBox="-14 -14 28 28"><path class="plane-fill" d="M13,0 L4.5,-1.5 L2.5,-1.8 L-2.5,-10 L-4,-10 L-3.5,-2 L-8,-1.6 L-9,-4.6 L-10.4,-4.6 L-10.8,-1.3 L-12,-0.8 L-12,0.8 L-10.8,1.3 L-10.4,4.6 L-9,4.6 L-8,1.6 L-3.5,2 L-4,10 L-2.5,10 L2.5,1.8 L4.5,1.5 Z"/></svg></div>
-    <div class="plane p5"><svg viewBox="-14 -14 28 28"><path class="plane-fill" d="M13,0 L4.5,-1.5 L2.5,-1.8 L-2.5,-10 L-4,-10 L-3.5,-2 L-8,-1.6 L-9,-4.6 L-10.4,-4.6 L-10.8,-1.3 L-12,-0.8 L-12,0.8 L-10.8,1.3 L-10.4,4.6 L-9,4.6 L-8,1.6 L-3.5,2 L-4,10 L-2.5,10 L2.5,1.8 L4.5,1.5 Z"/></svg></div>
-    <div class="plane p6"><svg viewBox="-14 -14 28 28"><path class="plane-fill" d="M13,0 L4.5,-1.5 L2.5,-1.8 L-2.5,-10 L-4,-10 L-3.5,-2 L-8,-1.6 L-9,-4.6 L-10.4,-4.6 L-10.8,-1.3 L-12,-0.8 L-12,0.8 L-10.8,1.3 L-10.4,4.6 L-9,4.6 L-8,1.6 L-3.5,2 L-4,10 L-2.5,10 L2.5,1.8 L4.5,1.5 Z"/></svg></div>
-    <div class="plane p7"><svg viewBox="-14 -14 28 28"><path class="plane-fill" d="M13,0 L4.5,-1.5 L2.5,-1.8 L-2.5,-10 L-4,-10 L-3.5,-2 L-8,-1.6 L-9,-4.6 L-10.4,-4.6 L-10.8,-1.3 L-12,-0.8 L-12,0.8 L-10.8,1.3 L-10.4,4.6 L-9,4.6 L-8,1.6 L-3.5,2 L-4,10 L-2.5,10 L2.5,1.8 L4.5,1.5 Z"/></svg></div>
-    <div class="plane p8"><svg viewBox="-14 -14 28 28"><path class="plane-fill" d="M13,0 L4.5,-1.5 L2.5,-1.8 L-2.5,-10 L-4,-10 L-3.5,-2 L-8,-1.6 L-9,-4.6 L-10.4,-4.6 L-10.8,-1.3 L-12,-0.8 L-12,0.8 L-10.8,1.3 L-10.4,4.6 L-9,4.6 L-8,1.6 L-3.5,2 L-4,10 L-2.5,10 L2.5,1.8 L4.5,1.5 Z"/></svg></div>
-    <div class="plane p9"><svg viewBox="-14 -14 28 28"><path class="plane-fill" d="M13,0 L4.5,-1.5 L2.5,-1.8 L-2.5,-10 L-4,-10 L-3.5,-2 L-8,-1.6 L-9,-4.6 L-10.4,-4.6 L-10.8,-1.3 L-12,-0.8 L-12,0.8 L-10.8,1.3 L-10.4,4.6 L-9,4.6 L-8,1.6 L-3.5,2 L-4,10 L-2.5,10 L2.5,1.8 L4.5,1.5 Z"/></svg></div>
-    <div class="plane p10"><svg viewBox="-14 -14 28 28"><path class="plane-fill" d="M13,0 L4.5,-1.5 L2.5,-1.8 L-2.5,-10 L-4,-10 L-3.5,-2 L-8,-1.6 L-9,-4.6 L-10.4,-4.6 L-10.8,-1.3 L-12,-0.8 L-12,0.8 L-10.8,1.3 L-10.4,4.6 L-9,4.6 L-8,1.6 L-3.5,2 L-4,10 L-2.5,10 L2.5,1.8 L4.5,1.5 Z"/></svg></div>
-    <div class="plane p11"><svg viewBox="-14 -14 28 28"><path class="plane-fill" d="M13,0 L4.5,-1.5 L2.5,-1.8 L-2.5,-10 L-4,-10 L-3.5,-2 L-8,-1.6 L-9,-4.6 L-10.4,-4.6 L-10.8,-1.3 L-12,-0.8 L-12,0.8 L-10.8,1.3 L-10.4,4.6 L-9,4.6 L-8,1.6 L-3.5,2 L-4,10 L-2.5,10 L2.5,1.8 L4.5,1.5 Z"/></svg></div>
-    <div class="plane p12"><svg viewBox="-14 -14 28 28"><path class="plane-fill" d="M13,0 L4.5,-1.5 L2.5,-1.8 L-2.5,-10 L-4,-10 L-3.5,-2 L-8,-1.6 L-9,-4.6 L-10.4,-4.6 L-10.8,-1.3 L-12,-0.8 L-12,0.8 L-10.8,1.3 L-10.4,4.6 L-9,4.6 L-8,1.6 L-3.5,2 L-4,10 L-2.5,10 L2.5,1.8 L4.5,1.5 Z"/></svg></div>
-    <div class="plane p13"><svg viewBox="-14 -14 28 28"><path class="plane-fill" d="M13,0 L4.5,-1.5 L2.5,-1.8 L-2.5,-10 L-4,-10 L-3.5,-2 L-8,-1.6 L-9,-4.6 L-10.4,-4.6 L-10.8,-1.3 L-12,-0.8 L-12,0.8 L-10.8,1.3 L-10.4,4.6 L-9,4.6 L-8,1.6 L-3.5,2 L-4,10 L-2.5,10 L2.5,1.8 L4.5,1.5 Z"/></svg></div>
-    <div class="plane p14"><svg viewBox="-14 -14 28 28"><path class="plane-fill" d="M13,0 L4.5,-1.5 L2.5,-1.8 L-2.5,-10 L-4,-10 L-3.5,-2 L-8,-1.6 L-9,-4.6 L-10.4,-4.6 L-10.8,-1.3 L-12,-0.8 L-12,0.8 L-10.8,1.3 L-10.4,4.6 L-9,4.6 L-8,1.6 L-3.5,2 L-4,10 L-2.5,10 L2.5,1.8 L4.5,1.5 Z"/></svg></div>
-    <div class="plane p15"><svg viewBox="-14 -14 28 28"><path class="plane-fill" d="M13,0 L4.5,-1.5 L2.5,-1.8 L-2.5,-10 L-4,-10 L-3.5,-2 L-8,-1.6 L-9,-4.6 L-10.4,-4.6 L-10.8,-1.3 L-12,-0.8 L-12,0.8 L-10.8,1.3 L-10.4,4.6 L-9,4.6 L-8,1.6 L-3.5,2 L-4,10 L-2.5,10 L2.5,1.8 L4.5,1.5 Z"/></svg></div>
-  </div>
+    <div class="sky" aria-hidden="true">
+      <div class="blob b1"></div>
+      <div class="blob b2"></div>
+      <div class="blob b3"></div>
+      <div class="blob b4"></div>
+      <div class="cloud-layer"></div>
+      <div class="plane p1">
+        <svg viewBox="-14 -14 28 28">
+          <path
+            class="plane-fill"
+            d="M13,0 L4.5,-1.5 L2.5,-1.8 L-2.5,-10 L-4,-10 L-3.5,-2 L-8,-1.6 L-9,-4.6 L-10.4,-4.6 L-10.8,-1.3 L-12,-0.8 L-12,0.8 L-10.8,1.3 L-10.4,4.6 L-9,4.6 L-8,1.6 L-3.5,2 L-4,10 L-2.5,10 L2.5,1.8 L4.5,1.5 Z"
+          />
+        </svg>
+      </div>
+      <div class="plane p2">
+        <svg viewBox="-14 -14 28 28">
+          <path
+            class="plane-fill"
+            d="M13,0 L4.5,-1.5 L2.5,-1.8 L-2.5,-10 L-4,-10 L-3.5,-2 L-8,-1.6 L-9,-4.6 L-10.4,-4.6 L-10.8,-1.3 L-12,-0.8 L-12,0.8 L-10.8,1.3 L-10.4,4.6 L-9,4.6 L-8,1.6 L-3.5,2 L-4,10 L-2.5,10 L2.5,1.8 L4.5,1.5 Z"
+          />
+        </svg>
+      </div>
+      <div class="plane p3">
+        <svg viewBox="-14 -14 28 28">
+          <path
+            class="plane-fill"
+            d="M13,0 L4.5,-1.5 L2.5,-1.8 L-2.5,-10 L-4,-10 L-3.5,-2 L-8,-1.6 L-9,-4.6 L-10.4,-4.6 L-10.8,-1.3 L-12,-0.8 L-12,0.8 L-10.8,1.3 L-10.4,4.6 L-9,4.6 L-8,1.6 L-3.5,2 L-4,10 L-2.5,10 L2.5,1.8 L4.5,1.5 Z"
+          />
+        </svg>
+      </div>
+      <div class="plane p4">
+        <svg viewBox="-14 -14 28 28">
+          <path
+            class="plane-fill"
+            d="M13,0 L4.5,-1.5 L2.5,-1.8 L-2.5,-10 L-4,-10 L-3.5,-2 L-8,-1.6 L-9,-4.6 L-10.4,-4.6 L-10.8,-1.3 L-12,-0.8 L-12,0.8 L-10.8,1.3 L-10.4,4.6 L-9,4.6 L-8,1.6 L-3.5,2 L-4,10 L-2.5,10 L2.5,1.8 L4.5,1.5 Z"
+          />
+        </svg>
+      </div>
+      <div class="plane p5">
+        <svg viewBox="-14 -14 28 28">
+          <path
+            class="plane-fill"
+            d="M13,0 L4.5,-1.5 L2.5,-1.8 L-2.5,-10 L-4,-10 L-3.5,-2 L-8,-1.6 L-9,-4.6 L-10.4,-4.6 L-10.8,-1.3 L-12,-0.8 L-12,0.8 L-10.8,1.3 L-10.4,4.6 L-9,4.6 L-8,1.6 L-3.5,2 L-4,10 L-2.5,10 L2.5,1.8 L4.5,1.5 Z"
+          />
+        </svg>
+      </div>
+      <div class="plane p6">
+        <svg viewBox="-14 -14 28 28">
+          <path
+            class="plane-fill"
+            d="M13,0 L4.5,-1.5 L2.5,-1.8 L-2.5,-10 L-4,-10 L-3.5,-2 L-8,-1.6 L-9,-4.6 L-10.4,-4.6 L-10.8,-1.3 L-12,-0.8 L-12,0.8 L-10.8,1.3 L-10.4,4.6 L-9,4.6 L-8,1.6 L-3.5,2 L-4,10 L-2.5,10 L2.5,1.8 L4.5,1.5 Z"
+          />
+        </svg>
+      </div>
+      <div class="plane p7">
+        <svg viewBox="-14 -14 28 28">
+          <path
+            class="plane-fill"
+            d="M13,0 L4.5,-1.5 L2.5,-1.8 L-2.5,-10 L-4,-10 L-3.5,-2 L-8,-1.6 L-9,-4.6 L-10.4,-4.6 L-10.8,-1.3 L-12,-0.8 L-12,0.8 L-10.8,1.3 L-10.4,4.6 L-9,4.6 L-8,1.6 L-3.5,2 L-4,10 L-2.5,10 L2.5,1.8 L4.5,1.5 Z"
+          />
+        </svg>
+      </div>
+      <div class="plane p8">
+        <svg viewBox="-14 -14 28 28">
+          <path
+            class="plane-fill"
+            d="M13,0 L4.5,-1.5 L2.5,-1.8 L-2.5,-10 L-4,-10 L-3.5,-2 L-8,-1.6 L-9,-4.6 L-10.4,-4.6 L-10.8,-1.3 L-12,-0.8 L-12,0.8 L-10.8,1.3 L-10.4,4.6 L-9,4.6 L-8,1.6 L-3.5,2 L-4,10 L-2.5,10 L2.5,1.8 L4.5,1.5 Z"
+          />
+        </svg>
+      </div>
+      <div class="plane p9">
+        <svg viewBox="-14 -14 28 28">
+          <path
+            class="plane-fill"
+            d="M13,0 L4.5,-1.5 L2.5,-1.8 L-2.5,-10 L-4,-10 L-3.5,-2 L-8,-1.6 L-9,-4.6 L-10.4,-4.6 L-10.8,-1.3 L-12,-0.8 L-12,0.8 L-10.8,1.3 L-10.4,4.6 L-9,4.6 L-8,1.6 L-3.5,2 L-4,10 L-2.5,10 L2.5,1.8 L4.5,1.5 Z"
+          />
+        </svg>
+      </div>
+      <div class="plane p10">
+        <svg viewBox="-14 -14 28 28">
+          <path
+            class="plane-fill"
+            d="M13,0 L4.5,-1.5 L2.5,-1.8 L-2.5,-10 L-4,-10 L-3.5,-2 L-8,-1.6 L-9,-4.6 L-10.4,-4.6 L-10.8,-1.3 L-12,-0.8 L-12,0.8 L-10.8,1.3 L-10.4,4.6 L-9,4.6 L-8,1.6 L-3.5,2 L-4,10 L-2.5,10 L2.5,1.8 L4.5,1.5 Z"
+          />
+        </svg>
+      </div>
+      <div class="plane p11">
+        <svg viewBox="-14 -14 28 28">
+          <path
+            class="plane-fill"
+            d="M13,0 L4.5,-1.5 L2.5,-1.8 L-2.5,-10 L-4,-10 L-3.5,-2 L-8,-1.6 L-9,-4.6 L-10.4,-4.6 L-10.8,-1.3 L-12,-0.8 L-12,0.8 L-10.8,1.3 L-10.4,4.6 L-9,4.6 L-8,1.6 L-3.5,2 L-4,10 L-2.5,10 L2.5,1.8 L4.5,1.5 Z"
+          />
+        </svg>
+      </div>
+      <div class="plane p12">
+        <svg viewBox="-14 -14 28 28">
+          <path
+            class="plane-fill"
+            d="M13,0 L4.5,-1.5 L2.5,-1.8 L-2.5,-10 L-4,-10 L-3.5,-2 L-8,-1.6 L-9,-4.6 L-10.4,-4.6 L-10.8,-1.3 L-12,-0.8 L-12,0.8 L-10.8,1.3 L-10.4,4.6 L-9,4.6 L-8,1.6 L-3.5,2 L-4,10 L-2.5,10 L2.5,1.8 L4.5,1.5 Z"
+          />
+        </svg>
+      </div>
+      <div class="plane p13">
+        <svg viewBox="-14 -14 28 28">
+          <path
+            class="plane-fill"
+            d="M13,0 L4.5,-1.5 L2.5,-1.8 L-2.5,-10 L-4,-10 L-3.5,-2 L-8,-1.6 L-9,-4.6 L-10.4,-4.6 L-10.8,-1.3 L-12,-0.8 L-12,0.8 L-10.8,1.3 L-10.4,4.6 L-9,4.6 L-8,1.6 L-3.5,2 L-4,10 L-2.5,10 L2.5,1.8 L4.5,1.5 Z"
+          />
+        </svg>
+      </div>
+      <div class="plane p14">
+        <svg viewBox="-14 -14 28 28">
+          <path
+            class="plane-fill"
+            d="M13,0 L4.5,-1.5 L2.5,-1.8 L-2.5,-10 L-4,-10 L-3.5,-2 L-8,-1.6 L-9,-4.6 L-10.4,-4.6 L-10.8,-1.3 L-12,-0.8 L-12,0.8 L-10.8,1.3 L-10.4,4.6 L-9,4.6 L-8,1.6 L-3.5,2 L-4,10 L-2.5,10 L2.5,1.8 L4.5,1.5 Z"
+          />
+        </svg>
+      </div>
+      <div class="plane p15">
+        <svg viewBox="-14 -14 28 28">
+          <path
+            class="plane-fill"
+            d="M13,0 L4.5,-1.5 L2.5,-1.8 L-2.5,-10 L-4,-10 L-3.5,-2 L-8,-1.6 L-9,-4.6 L-10.4,-4.6 L-10.8,-1.3 L-12,-0.8 L-12,0.8 L-10.8,1.3 L-10.4,4.6 L-9,4.6 L-8,1.6 L-3.5,2 L-4,10 L-2.5,10 L2.5,1.8 L4.5,1.5 Z"
+          />
+        </svg>
+      </div>
+    </div>
 
-  <div id="hero">
-    <div class="wrap">
-      <div class="glass">
-        <span class="eyebrow">יומן מסע בקליק</span>
-        <h1>Memo<em>Trip</em></h1>
-        <p class="sub">מתארים במילים חופשיות, מצרפים מסמכים רלוונטיים (הזמנות טיסה, לינה, או מסמך שמתאר את הטיול שלכם עם כל הלוגיסטיקה) — ומקבלים דף מסע מעוצב שאפשר לשתף עם חברים, או לשמור כמזכרת.</p>
-        <div class="steps">
-          <div class="step"><b>1</b><span>מתארים את הטיול</span></div>
-          <div class="arrow">←</div>
-          <div class="step"><b>2</b><span>מצרפים מסמכים</span></div>
-          <div class="arrow">←</div>
-          <div class="step"><b>3</b><span>מקבלים דף מסע</span></div>
+    <div id="hero">
+      <div class="wrap">
+        <div class="glass">
+          <span class="eyebrow">יומן מסע בקליק</span>
+          <h1>Memo<em>Trip</em></h1>
+          <p class="sub">
+            מתארים במילים חופשיות, מצרפים מסמכים רלוונטיים (הזמנות טיסה, לינה, או מסמך שמתאר את
+            הטיול שלכם עם כל הלוגיסטיקה) — ומקבלים דף מסע מעוצב שאפשר לשתף עם חברים, או לשמור
+            כמזכרת.
+          </p>
+          <div class="steps">
+            <div class="step"><b>1</b><span>מתארים את הטיול</span></div>
+            <div class="arrow">←</div>
+            <div class="step"><b>2</b><span>מצרפים מסמכים</span></div>
+            <div class="arrow">←</div>
+            <div class="step"><b>3</b><span>מקבלים דף מסע</span></div>
+          </div>
         </div>
       </div>
     </div>
-  </div>
 
-  <main>
-    <div class="wrap">
-      <div class="card">
-        <form method="post" action="/trips" enctype="multipart/form-data" id="tripForm">
-          <label>תיאור הטיול</label>
-          <textarea name="description" placeholder="לאן, מתי, מי, מה קרה בדרך..."></textarea>
+    <main>
+      <div class="wrap">
+        <div class="card">
+          <form method="post" action="/trips" enctype="multipart/form-data" id="tripForm">
+            <label>תיאור הטיול</label>
+            <textarea name="description" placeholder="לאן, מתי, מי, מה קרה בדרך..."></textarea>
 
-          <label>מסמכים <span style="font-weight:400;color:var(--muted)">(אופציונלי)</span></label>
-          <label for="docsInput" class="file-btn">
-            <svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-            <span class="txt" id="docsBtnText">בחרו קבצים</span>
-          </label>
-          <input type="file" id="docsInput" name="docs" multiple accept=".pdf,.docx,.doc,.txt" style="display:none">
-          <div class="hint">כרטיסי טיסה, אישורי הזמנה, מסלול מודפס — כל מה שיש.</div>
+            <label
+              >מסמכים <span style="font-weight: 400; color: var(--muted)">(אופציונלי)</span></label
+            >
+            <label for="docsInput" class="file-btn">
+              <svg
+                class="ic"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path
+                  d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"
+                />
+              </svg>
+              <span class="txt" id="docsBtnText">בחרו קבצים</span>
+            </label>
+            <input
+              type="file"
+              id="docsInput"
+              name="docs"
+              multiple
+              accept=".pdf,.docx,.doc,.txt"
+              style="display: none"
+            />
+            <div class="hint">כרטיסי טיסה, אישורי הזמנה, מסלול מודפס — כל מה שיש.</div>
 
-          <label>אזור בעולם <span style="font-weight:400;color:var(--muted)">(עוזר לזיהוי מיקומים)</span></label>
-          <input type="text" name="region_hint" placeholder="למשל: New York, USA">
+            <label
+              >אזור בעולם
+              <span style="font-weight: 400; color: var(--muted)"
+                >(עוזר לזיהוי מיקומים)</span
+              ></label
+            >
+            <input type="text" name="region_hint" placeholder="למשל: New York, USA" />
 
-          <label>העלו תמונות מ-Google Photos <span style="font-weight:400;color:var(--muted)">(אופציונלי)</span></label>
-          <button type="button" class="btn-photos" id="connectPhotos">
-            <span class="ic">📷</span><span class="txt">חברו אלבום מ-Google Photos</span>
-          </button>
-          <div class="photos-status" id="photosStatus" hidden></div>
-          <div class="hint" id="photosHint">בחרו עד 200 תמונות מהטיול — הטובות ביותר ישתלבו אוטומטית בדף כשהוא יהיה מוכן.</div>
-          <div class="hint" id="photosSkipHint">אפשר גם לדלג על בחירת התמונות עכשיו ולהוסיף אותן בשלב הבא.</div>
-          <input type="hidden" name="picker_sid" id="pickerSidInput" value="">
+            <label
+              >העלו תמונות מ-Google Photos
+              <span style="font-weight: 400; color: var(--muted)">(אופציונלי)</span></label
+            >
+            <button type="button" class="btn-photos" id="connectPhotos">
+              <span class="ic">📷</span><span class="txt">חברו אלבום מ-Google Photos</span>
+            </button>
+            <div class="photos-status" id="photosStatus" hidden></div>
+            <div class="hint" id="photosHint">
+              בחרו עד 200 תמונות מהטיול — הטובות ביותר ישתלבו אוטומטית בדף כשהוא יהיה מוכן.
+            </div>
+            <div class="hint" id="photosSkipHint">
+              אפשר גם לדלג על בחירת התמונות עכשיו ולהוסיף אותן בשלב הבא.
+            </div>
+            <input type="hidden" name="picker_sid" id="pickerSidInput" value="" />
 
-          <button type="submit">בואו נצא לדרך</button>
-          <div class="err-banner" id="errBanner"></div>
-        </form>
+            <button type="submit">בואו נצא לדרך</button>
+            <div class="err-banner" id="errBanner"></div>
+          </form>
+        </div>
+
+        {{TRIPS}}
       </div>
+    </main>
 
-      {{TRIPS}}
-    </div>
-  </main>
+    <footer><a href="/privacy">מדיניות פרטיות</a> · <a href="/terms">תנאי שימוש</a></footer>
 
-  <footer><a href="/privacy">מדיניות פרטיות</a> · <a href="/terms">תנאי שימוש</a></footer>
-
-  <div class="modal-overlay" id="deleteModal" hidden>
-    <div class="modal-box">
-      <p>למחוק את הטיול הזה לצמיתות?</p>
-      <div class="modal-actions">
-        <button type="button" class="btn ghost" id="deleteCancel">ביטול</button>
-        <button type="button" class="btn danger" id="deleteConfirm">מחיקה</button>
+    <div class="modal-overlay" id="deleteModal" hidden>
+      <div class="modal-box">
+        <p>למחוק את הטיול הזה לצמיתות?</p>
+        <div class="modal-actions">
+          <button type="button" class="btn ghost" id="deleteCancel">ביטול</button>
+          <button type="button" class="btn danger" id="deleteConfirm">מחיקה</button>
+        </div>
       </div>
     </div>
-  </div>
 
-<script>
-  document.getElementById('docsInput').addEventListener('change', (e) => {
-    const n = e.target.files.length;
-    const label = document.querySelector('.file-btn');
-    const txt = document.getElementById('docsBtnText');
-    if(n === 0){
-      txt.textContent = 'בחרו קבצים';
-      label.classList.remove('chosen');
-    } else {
-      txt.textContent = n === 1 ? e.target.files[0].name : `נבחרו ${n} קבצים`;
-      label.classList.add('chosen');
-    }
-  });
-
-  // account avatar dropdown (only present when logged in)
-  const avatarBtn = document.getElementById('avatarBtn');
-  const accountMenu = document.getElementById('accountMenu');
-  if(avatarBtn && accountMenu){
-    avatarBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const open = !accountMenu.hidden;
-      accountMenu.hidden = open;
-      avatarBtn.setAttribute('aria-expanded', String(!open));
-    });
-    document.addEventListener('click', (e) => {
-      if(!accountMenu.hidden && !accountMenu.contains(e.target) && e.target !== avatarBtn){
-        accountMenu.hidden = true;
-        avatarBtn.setAttribute('aria-expanded', 'false');
-      }
-    });
-    document.addEventListener('keydown', (e) => {
-      if(e.key === 'Escape' && !accountMenu.hidden){
-        accountMenu.hidden = true;
-        avatarBtn.setAttribute('aria-expanded', 'false');
-      }
-    });
-    const myTripsLink = document.getElementById('myTripsLink');
-    if(myTripsLink){
-      myTripsLink.addEventListener('click', () => {
-        accountMenu.hidden = true;
-        avatarBtn.setAttribute('aria-expanded', 'false');
-      });
-    }
-    const logoutBtn = document.getElementById('logoutBtn');
-    if(logoutBtn){
-      logoutBtn.addEventListener('click', async () => {
-        logoutBtn.disabled = true;
-        await fetch('/logout', {method: 'POST'});
-        location.href = '/';
-      });
-    }
-  }
-
-  // delete a trip: an in-page confirm dialog (not the browser's native confirm()),
-  // then call the backend and drop the card from the list
-  const deleteModal = document.getElementById('deleteModal');
-  let pendingDeleteBtn = null;
-
-  function closeDeleteModal(){ deleteModal.hidden = true; pendingDeleteBtn = null; }
-
-  document.querySelectorAll('.del-btn').forEach((btn) => {
-    btn.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      pendingDeleteBtn = btn;
-      deleteModal.hidden = false;
-    });
-  });
-  document.getElementById('deleteCancel').onclick = closeDeleteModal;
-  deleteModal.addEventListener('click', (e) => { if(e.target === deleteModal) closeDeleteModal(); });
-  document.addEventListener('keydown', (e) => { if(e.key === 'Escape' && !deleteModal.hidden) closeDeleteModal(); });
-
-  document.getElementById('deleteConfirm').onclick = async () => {
-    const btn = pendingDeleteBtn;
-    closeDeleteModal();
-    if(!btn) return;
-    const tid = btn.dataset.tid;
-    btn.disabled = true;
-    try {
-      const r = await fetch(`/trips/${tid}/delete`, {method: 'POST'});
-      if(!r.ok) throw new Error('delete failed');
-      const card = btn.closest('.trip-card');
-      const list = document.getElementById('trips');
-      if(card) card.remove();
-      if(list && !list.querySelector('.trip-card')){
-        const empty = document.createElement('p');
-        empty.className = 'hint';
-        empty.textContent = 'דפי הטיולים שלכם יופיעו כאן אחרי שתצרו אותם.';
-        list.appendChild(empty);
-      }
-    } catch(err) {
-      btn.disabled = false;
-      alert('משהו השתבש במחיקה, נסו שוב.');
-    }
-  };
-
-  // graceful inline error instead of a bare browser alert
-  document.getElementById('tripForm').addEventListener('submit', async (e) => {
-    const ta = e.target.description;
-    const files = e.target.docs.files;
-    if(!ta.value.trim() && files.length === 0){
-      e.preventDefault();
-      const b = document.getElementById('errBanner');
-      b.textContent = 'צריך לפחות תיאור אחד או מסמך אחד כדי להתחיל.';
-      b.style.display = 'block';
-    }
-  });
-
-  // photo picker: a real picking/confirmed state instead of a button that goes
-  // "connected" forever with no way back if the Google tab gets closed by mistake
-  const connectBtn = document.getElementById('connectPhotos');
-  const photosStatus = document.getElementById('photosStatus');
-  const photosHint = document.getElementById('photosHint');
-  const pickerSidInput = document.getElementById('pickerSidInput');
-
-  // One click opens one popup, synchronously (required to dodge the browser's
-  // popup blocker - it only allows window.open() called directly inside a
-  // click, before any await). That SAME popup then travels, on its own,
-  // through Google's consent screen (if needed) and our own bridge page
-  // straight to Google's real picker - see _photos_bridge_page in webapp.py.
-  // This tab never navigates; it just listens for that popup to report
-  // "connected" via postMessage, so it can flip into picking mode without
-  // the user ever clicking a second time.
-  window.addEventListener('message', (ev) => {
-    if (ev.origin !== window.location.origin) return;
-    if (ev.data && ev.data.type === 'memotrip_photos_ready') {
-      pickerSidInput.value = ev.data.sid;
-      connectBtn.disabled = false;
-      connectBtn.querySelector('.txt').textContent = 'חברו אלבום מ-Google Photos';
-      photosHint.textContent = 'סמנו שם את התמונות ולחצו Done, ואז חוזרים לכאן ולוחצים "סיימתי לבחור".';
-      showPickingState();
-    }
-  });
-
-  async function startPickerSession(popup){
-    try {
-      const r = await fetch('/photos/session', {method: 'POST'});
-      const j = await r.json();
-      if(j.error){
-        if(j.connect_url || j.login_url){
-          const url = j.connect_url || j.login_url;
-          if(popup){ popup.location = url; } else { window.location.href = url; }
-          return 'pending';   // not connected yet - the message listener above finishes the job once the popup reports back
+    <script>
+      document.getElementById("docsInput").addEventListener("change", (e) => {
+        const n = e.target.files.length;
+        const label = document.querySelector(".file-btn");
+        const txt = document.getElementById("docsBtnText");
+        if (n === 0) {
+          txt.textContent = "בחרו קבצים";
+          label.classList.remove("chosen");
+        } else {
+          txt.textContent = n === 1 ? e.target.files[0].name : `נבחרו ${n} קבצים`;
+          label.classList.add("chosen");
         }
-        if(popup) popup.close();
-        photosHint.textContent = 'לא הצלחנו להתחבר ל-Google Photos: ' + j.error;
-        return null;
+      });
+
+      // account avatar dropdown (only present when logged in)
+      const avatarBtn = document.getElementById("avatarBtn");
+      const accountMenu = document.getElementById("accountMenu");
+      if (avatarBtn && accountMenu) {
+        avatarBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const open = !accountMenu.hidden;
+          accountMenu.hidden = open;
+          avatarBtn.setAttribute("aria-expanded", String(!open));
+        });
+        document.addEventListener("click", (e) => {
+          if (!accountMenu.hidden && !accountMenu.contains(e.target) && e.target !== avatarBtn) {
+            accountMenu.hidden = true;
+            avatarBtn.setAttribute("aria-expanded", "false");
+          }
+        });
+        document.addEventListener("keydown", (e) => {
+          if (e.key === "Escape" && !accountMenu.hidden) {
+            accountMenu.hidden = true;
+            avatarBtn.setAttribute("aria-expanded", "false");
+          }
+        });
+        const myTripsLink = document.getElementById("myTripsLink");
+        if (myTripsLink) {
+          myTripsLink.addEventListener("click", () => {
+            accountMenu.hidden = true;
+            avatarBtn.setAttribute("aria-expanded", "false");
+          });
+        }
+        const logoutBtn = document.getElementById("logoutBtn");
+        if (logoutBtn) {
+          logoutBtn.addEventListener("click", async () => {
+            logoutBtn.disabled = true;
+            await fetch("/logout", { method: "POST" });
+            location.href = "/";
+          });
+        }
       }
-      pickerSidInput.value = j.sid;
-      if(popup){
-        popup.location = j.picker_uri;
-        photosHint.textContent = 'סמנו שם את התמונות ולחצו Done, ואז חוזרים לכאן ולוחצים "סיימתי לבחור".';
-      } else {
-        photosHint.innerHTML = 'הדפדפן חסם את פתיחת הכרטיסייה — <a href="' + j.picker_uri +
-                                '" target="_blank" rel="noopener">לחצו כאן לפתוח את הבורר</a>, ואז חוזרים לכאן.';
+
+      // delete a trip: an in-page confirm dialog (not the browser's native confirm()),
+      // then call the backend and drop the card from the list
+      const deleteModal = document.getElementById("deleteModal");
+      let pendingDeleteBtn = null;
+
+      function closeDeleteModal() {
+        deleteModal.hidden = true;
+        pendingDeleteBtn = null;
       }
-      return j;
-    } catch(err) {
-      if(popup) popup.close();
-      photosHint.textContent = 'לא הצלחנו להתחבר ל-Google Photos.';
-      return null;
-    }
-  }
 
-  function showPickingState(){
-    connectBtn.hidden = true;
-    photosStatus.hidden = false;
-    document.getElementById('photosSkipHint').hidden = true;  // "skip for now" no longer makes sense mid-pick
-    photosStatus.innerHTML =
-      '<button type="button" class="btn ghost" id="reselectPhotos">בחר מחדש</button>' +
-      '<button type="button" class="btn" id="donePickingPhotos">✓ סיימתי לבחור</button>';
-    document.getElementById('reselectPhotos').onclick = () => startPickerSession(window.open('', '_blank'));
-    document.getElementById('donePickingPhotos').onclick = showConfirmedState;
-  }
+      document.querySelectorAll(".del-btn").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          pendingDeleteBtn = btn;
+          deleteModal.hidden = false;
+        });
+      });
+      document.getElementById("deleteCancel").onclick = closeDeleteModal;
+      deleteModal.addEventListener("click", (e) => {
+        if (e.target === deleteModal) closeDeleteModal();
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && !deleteModal.hidden) closeDeleteModal();
+      });
 
-  function showConfirmedState(){
-    photosStatus.innerHTML =
-      '<span class="badge">✓ תמונות נבחרו</span>' +
-      '<button type="button" class="link-btn" id="changePhotos">בחירה מחדש</button>';
-    photosHint.textContent = 'אפשר לשנות את הבחירה בכל שלב לפני השליחה.';
-    document.getElementById('changePhotos').onclick = async () => {
-      const j = await startPickerSession(window.open('', '_blank'));
-      if(j && j !== 'pending') showPickingState();
-    };
-  }
+      document.getElementById("deleteConfirm").onclick = async () => {
+        const btn = pendingDeleteBtn;
+        closeDeleteModal();
+        if (!btn) return;
+        const tid = btn.dataset.tid;
+        btn.disabled = true;
+        try {
+          const r = await fetch(`/trips/${tid}/delete`, { method: "POST" });
+          if (!r.ok) throw new Error("delete failed");
+          const card = btn.closest(".trip-card");
+          const list = document.getElementById("trips");
+          if (card) card.remove();
+          if (list && !list.querySelector(".trip-card")) {
+            const empty = document.createElement("p");
+            empty.className = "hint";
+            empty.textContent = "דפי הטיולים שלכם יופיעו כאן אחרי שתצרו אותם.";
+            list.appendChild(empty);
+          }
+        } catch (err) {
+          btn.disabled = false;
+          alert("משהו השתבש במחיקה, נסו שוב.");
+        }
+      };
 
-  connectBtn.onclick = async () => {
-    const popup = window.open('', '_blank');  // must be synchronous, right here - see comment above
-    connectBtn.disabled = true;
-    connectBtn.querySelector('.txt').textContent = 'פותח...';
-    const j = await startPickerSession(popup);
-    if(j === 'pending') return;   // message listener re-enables the button and continues once the popup finishes
-    connectBtn.disabled = false;
-    connectBtn.querySelector('.txt').textContent = 'חברו אלבום מ-Google Photos';
-    if(j) showPickingState();
-  };
-</script>
-</body>
+      // graceful inline error instead of a bare browser alert
+      document.getElementById("tripForm").addEventListener("submit", async (e) => {
+        const ta = e.target.description;
+        const files = e.target.docs.files;
+        if (!ta.value.trim() && files.length === 0) {
+          e.preventDefault();
+          const b = document.getElementById("errBanner");
+          b.textContent = "צריך לפחות תיאור אחד או מסמך אחד כדי להתחיל.";
+          b.style.display = "block";
+        }
+      });
+
+      // photo picker: a real picking/confirmed state instead of a button that goes
+      // "connected" forever with no way back if the Google tab gets closed by mistake
+      const connectBtn = document.getElementById("connectPhotos");
+      const photosStatus = document.getElementById("photosStatus");
+      const photosHint = document.getElementById("photosHint");
+      const pickerSidInput = document.getElementById("pickerSidInput");
+
+      // One click opens one popup, synchronously (required to dodge the browser's
+      // popup blocker - it only allows window.open() called directly inside a
+      // click, before any await). That SAME popup then travels, on its own,
+      // through Google's consent screen (if needed) and our own bridge page
+      // straight to Google's real picker - see _photos_bridge_page in webapp.py.
+      // This tab never navigates; it just listens for that popup to report
+      // "connected" via postMessage, so it can flip into picking mode without
+      // the user ever clicking a second time.
+      window.addEventListener("message", (ev) => {
+        if (ev.origin !== window.location.origin) return;
+        if (ev.data && ev.data.type === "memotrip_photos_ready") {
+          pickerSidInput.value = ev.data.sid;
+          connectBtn.disabled = false;
+          connectBtn.querySelector(".txt").textContent = "חברו אלבום מ-Google Photos";
+          photosHint.textContent =
+            'סמנו שם את התמונות ולחצו Done, ואז חוזרים לכאן ולוחצים "סיימתי לבחור".';
+          showPickingState();
+        }
+      });
+
+      async function startPickerSession(popup) {
+        try {
+          const r = await fetch("/photos/session", { method: "POST" });
+          const j = await r.json();
+          if (j.error) {
+            if (j.connect_url || j.login_url) {
+              const url = j.connect_url || j.login_url;
+              if (popup) {
+                popup.location = url;
+              } else {
+                window.location.href = url;
+              }
+              return "pending"; // not connected yet - the message listener above finishes the job once the popup reports back
+            }
+            if (popup) popup.close();
+            photosHint.textContent = "לא הצלחנו להתחבר ל-Google Photos: " + j.error;
+            return null;
+          }
+          pickerSidInput.value = j.sid;
+          if (popup) {
+            popup.location = j.picker_uri;
+            photosHint.textContent =
+              'סמנו שם את התמונות ולחצו Done, ואז חוזרים לכאן ולוחצים "סיימתי לבחור".';
+          } else {
+            photosHint.innerHTML =
+              'הדפדפן חסם את פתיחת הכרטיסייה — <a href="' +
+              j.picker_uri +
+              '" target="_blank" rel="noopener">לחצו כאן לפתוח את הבורר</a>, ואז חוזרים לכאן.';
+          }
+          return j;
+        } catch (err) {
+          if (popup) popup.close();
+          photosHint.textContent = "לא הצלחנו להתחבר ל-Google Photos.";
+          return null;
+        }
+      }
+
+      function showPickingState() {
+        connectBtn.hidden = true;
+        photosStatus.hidden = false;
+        document.getElementById("photosSkipHint").hidden = true; // "skip for now" no longer makes sense mid-pick
+        photosStatus.innerHTML =
+          '<button type="button" class="btn ghost" id="reselectPhotos">בחר מחדש</button>' +
+          '<button type="button" class="btn" id="donePickingPhotos">✓ סיימתי לבחור</button>';
+        document.getElementById("reselectPhotos").onclick = () =>
+          startPickerSession(window.open("", "_blank"));
+        document.getElementById("donePickingPhotos").onclick = showConfirmedState;
+      }
+
+      function showConfirmedState() {
+        photosStatus.innerHTML =
+          '<span class="badge">✓ תמונות נבחרו</span>' +
+          '<button type="button" class="link-btn" id="changePhotos">בחירה מחדש</button>';
+        photosHint.textContent = "אפשר לשנות את הבחירה בכל שלב לפני השליחה.";
+        document.getElementById("changePhotos").onclick = async () => {
+          const j = await startPickerSession(window.open("", "_blank"));
+          if (j && j !== "pending") showPickingState();
+        };
+      }
+
+      connectBtn.onclick = async () => {
+        const popup = window.open("", "_blank"); // must be synchronous, right here - see comment above
+        connectBtn.disabled = true;
+        connectBtn.querySelector(".txt").textContent = "פותח...";
+        const j = await startPickerSession(popup);
+        if (j === "pending") return; // message listener re-enables the button and continues once the popup finishes
+        connectBtn.disabled = false;
+        connectBtn.querySelector(".txt").textContent = "חברו אלבום מ-Google Photos";
+        if (j) showPickingState();
+      };
+    </script>
+  </body>
 </html>

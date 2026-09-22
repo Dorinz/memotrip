@@ -1,569 +1,659 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="he" dir="rtl">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>{{TITLE}}</title>
-<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@500;700;800;900&family=Heebo:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" crossorigin="anonymous" />
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" crossorigin="anonymous"></script>
-<style>
-  /* Structural reference: a Figma Community "creative travel blog" template
-     (sticky sidebar identity + a dark, itinerary-row day format) — adapted onto
-     this page's real data, maps and RTL layout. See BUILD_README for the source. */
-  :root{
-    --bg-0:{{C_BG0}};
-    --bg-1:{{C_BG1}};
-    --bg-2:#FFFFFF;
-    --bg-3:{{C_BG3}};
-    --ink:{{C_INK}};
-    --ink-dim:{{C_INK_DIM}};
-    --turquoise:{{C_TURQ}};
-    --turquoise-deep:{{C_TURQ_DEEP}};
-    --sea:{{C_SEA}};
-    --sea-deep:{{C_SEA_DEEP}};
-    --dark-bg:{{C_DARK_BG}};
-    --dark-fg:{{C_DARK_FG}};
-    --dark-muted:{{C_DARK_MUTED}};
-    --sidebar-bg:{{C_SIDEBAR_BG}};
-    --sidebar-ink:{{C_SIDEBAR_INK}};
-    --line:rgba({{C_INK_RGB}},0.12);
-    --dark-line:rgba({{C_DARK_FG_RGB}},0.22);
-    --sidebar-line:rgba({{C_SIDEBAR_INK_RGB}},0.25);
-    --muted:{{C_MUTED}};
-    --shadow: 0 20px 50px -22px rgba({{C_INK_RGB}},0.20);
-  }
-  *{box-sizing:border-box; margin:0; padding:0;}
-  html{scroll-behavior:smooth;}
-  body{
-    background:var(--bg-0);
-    color:var(--ink);
-    font-family:'Heebo', sans-serif;
-    line-height:1.7;
-    overflow-x:hidden;
-    display:flex; align-items:flex-start; min-height:100vh;
-  }
-  ::selection{ background:var(--turquoise); color:var(--bg-0); }
-  .mono{ font-family:'IBM Plex Mono', monospace; direction:ltr; unicode-bidi:embed; letter-spacing:0.02em; }
-  h1,h2,h3,.display{ font-family:'Rubik', sans-serif; font-weight:800; }
-  .eyebrow{ font-size:0.92rem; color:var(--ink-dim); margin-bottom:10px; display:block; }
-  a{ color:inherit; }
-  img{ max-width:100%; display:block; }
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{TITLE}}</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Rubik:wght@500;700;800;900&family=Heebo:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"
+      crossorigin="anonymous"
+    />
+    <script
+      src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"
+      crossorigin="anonymous"
+    ></script>
+    <style>
+      /* Structural reference: a Figma Community "creative travel blog" template
+         (sticky sidebar identity + a dark, itinerary-row day format) — adapted onto
+         this page's real data, maps and RTL layout. See BUILD_README for the source. */
+      :root{
+        --bg-0:{{C_BG0}};
+        --bg-1:{{C_BG1}};
+        --bg-2:#FFFFFF;
+        --bg-3:{{C_BG3}};
+        --ink:{{C_INK}};
+        --ink-dim:{{C_INK_DIM}};
+        --turquoise:{{C_TURQ}};
+        --turquoise-deep:{{C_TURQ_DEEP}};
+        --sea:{{C_SEA}};
+        --sea-deep:{{C_SEA_DEEP}};
+        --dark-bg:{{C_DARK_BG}};
+        --dark-fg:{{C_DARK_FG}};
+        --dark-muted:{{C_DARK_MUTED}};
+        --sidebar-bg:{{C_SIDEBAR_BG}};
+        --sidebar-ink:{{C_SIDEBAR_INK}};
+        --line:rgba({{C_INK_RGB}},0.12);
+        --dark-line:rgba({{C_DARK_FG_RGB}},0.22);
+        --sidebar-line:rgba({{C_SIDEBAR_INK_RGB}},0.25);
+        --muted:{{C_MUTED}};
+        --shadow: 0 20px 50px -22px rgba({{C_INK_RGB}},0.20);
+      }
+      *{box-sizing:border-box; margin:0; padding:0;}
+      html{scroll-behavior:smooth;}
+      body{
+        background:var(--bg-0);
+        color:var(--ink);
+        font-family:'Heebo', sans-serif;
+        line-height:1.7;
+        overflow-x:hidden;
+        display:flex; align-items:flex-start; min-height:100vh;
+      }
+      ::selection{ background:var(--turquoise); color:var(--bg-0); }
+      .mono{ font-family:'IBM Plex Mono', monospace; direction:ltr; unicode-bidi:embed; letter-spacing:0.02em; }
+      h1,h2,h3,.display{ font-family:'Rubik', sans-serif; font-weight:800; }
+      .eyebrow{ font-size:0.92rem; color:var(--ink-dim); margin-bottom:10px; display:block; }
+      a{ color:inherit; }
+      img{ max-width:100%; display:block; }
 
-  /* ---------- progress rail — sits at the seam between sidebar and content ---------- */
-  #rail{ position:fixed; top:0; right:340px; height:100%; width:2px; z-index:50; background:var(--line); }
-  #rail-fill{ width:100%; height:0%; background:var(--turquoise-deep); transition:height .1s linear; }
+      /* ---------- progress rail — sits at the seam between sidebar and content ---------- */
+      #rail{ position:fixed; top:0; right:340px; height:100%; width:2px; z-index:50; background:var(--line); }
+      #rail-fill{ width:100%; height:0%; background:var(--turquoise-deep); transition:height .1s linear; }
 
-  /* ---------- layout helpers ---------- */
-  .wrap{ max-width:920px; margin:0 auto; padding:0 28px; }
-  section{ position:relative; }
-  @media(max-width:640px){ .wrap{ padding:0 20px; } }
+      /* ---------- layout helpers ---------- */
+      .wrap{ max-width:920px; margin:0 auto; padding:0 28px; }
+      section{ position:relative; }
+      @media(max-width:640px){ .wrap{ padding:0 20px; } }
 
-  /* ---------- SIDEBAR — the page's persistent identity (adapted from the
-     Figma reference's sticky sidebar; its animated "currently in..." marquee
-     was dropped, not adopted — this template adds no new motion) ---------- */
-  #sidebar{
-    flex:0 0 340px; position:sticky; top:0; height:100vh; overflow-y:auto;
-    background:var(--sidebar-bg);
-    padding:40px 32px; display:flex; flex-direction:column;
-  }
-  /* one bold, saturated color for every sidebar text element (title through
-     stats) — matching the reference's punchy single-color panel, hierarchy
-     coming from size/weight alone rather than a muted secondary tone */
-  #sidebar .wordmark{
-    font-size:clamp(1.8rem, 2.6vw, 2.3rem); line-height:1.05; color:var(--sidebar-ink); margin-bottom:14px;
-  }
-  #sidebar .wordmark em{ font-style:italic; font-weight:inherit; }
-  #sidebar .eyebrow{ color:var(--sidebar-ink); }
-  #sidebar .tagline{ color:var(--sidebar-ink); font-size:0.98rem; margin-bottom:34px; }
-  #sidebar .stats{ display:flex; flex-direction:column; gap:0; margin-top:auto; padding-top:24px; }
-  #sidebar .stats > div{
-    display:flex; align-items:baseline; justify-content:space-between; gap:12px;
-    padding:11px 0; border-top:1.5px solid var(--sidebar-line);
-  }
-  #sidebar .stats > div:last-child{ border-bottom:1.5px solid var(--sidebar-line); }
-  #sidebar .stats .n{ font-family:'IBM Plex Mono',monospace; direction:ltr; font-size:1.15rem; font-weight:500; color:var(--sidebar-ink); }
-  #sidebar .stats .l{ font-size:0.88rem; color:var(--sidebar-ink); opacity:.85; }
-  @media(max-width:860px){
-    /* align-items:flex-start (set above for the desktop row layout, so the two
-       columns don't stretch to equal height) would otherwise stop #content from
-       filling the viewport width once the axes swap to column on mobile */
-    body{ flex-direction:column; align-items:stretch; }
-    #sidebar{ position:static; height:auto; width:100%; flex-basis:auto; }
-    #sidebar .stats{ margin-top:24px; }
-    #rail{ right:0; }
-  }
+      /* ---------- SIDEBAR — the page's persistent identity (adapted from the
+         Figma reference's sticky sidebar; its animated "currently in..." marquee
+         was dropped, not adopted — this template adds no new motion) ---------- */
+      #sidebar{
+        flex:0 0 340px; position:sticky; top:0; height:100vh; overflow-y:auto;
+        background:var(--sidebar-bg);
+        padding:40px 32px; display:flex; flex-direction:column;
+      }
+      /* one bold, saturated color for every sidebar text element (title through
+         stats) — matching the reference's punchy single-color panel, hierarchy
+         coming from size/weight alone rather than a muted secondary tone */
+      #sidebar .wordmark{
+        font-size:clamp(1.8rem, 2.6vw, 2.3rem); line-height:1.05; color:var(--sidebar-ink); margin-bottom:14px;
+      }
+      #sidebar .wordmark em{ font-style:italic; font-weight:inherit; }
+      #sidebar .eyebrow{ color:var(--sidebar-ink); }
+      #sidebar .tagline{ color:var(--sidebar-ink); font-size:0.98rem; margin-bottom:34px; }
+      #sidebar .stats{ display:flex; flex-direction:column; gap:0; margin-top:auto; padding-top:24px; }
+      #sidebar .stats > div{
+        display:flex; align-items:baseline; justify-content:space-between; gap:12px;
+        padding:11px 0; border-top:1.5px solid var(--sidebar-line);
+      }
+      #sidebar .stats > div:last-child{ border-bottom:1.5px solid var(--sidebar-line); }
+      #sidebar .stats .n{ font-family:'IBM Plex Mono',monospace; direction:ltr; font-size:1.15rem; font-weight:500; color:var(--sidebar-ink); }
+      #sidebar .stats .l{ font-size:0.88rem; color:var(--sidebar-ink); opacity:.85; }
+      @media(max-width:860px){
+        /* align-items:flex-start (set above for the desktop row layout, so the two
+           columns don't stretch to equal height) would otherwise stop #content from
+           filling the viewport width once the axes swap to column on mobile */
+        body{ flex-direction:column; align-items:stretch; }
+        #sidebar{ position:static; height:auto; width:100%; flex-basis:auto; }
+        #sidebar .stats{ margin-top:24px; }
+        #rail{ right:0; }
+      }
 
-  /* ---------- MAIN CONTENT COLUMN ---------- */
-  #content{ flex:1 1 auto; min-width:0; }
+      /* ---------- MAIN CONTENT COLUMN ---------- */
+      #content{ flex:1 1 auto; min-width:0; }
 
-  /* ---------- HERO — a sticky photographic moment the timeline scrolls over,
-     not a second place for the title (that lives in the sidebar) ---------- */
-  #hero{
-    position:sticky; top:0; z-index:0; min-height:100vh;
-    display:flex; flex-direction:column; align-items:center; justify-content:center;
-    text-align:center; padding:80px 20px; overflow:hidden;
-    background-size:cover; background-position:center;
-    background-image:
-      radial-gradient(ellipse at 30% 20%, rgba({{C_TURQ_RGB}},0.16), transparent 55%),
-      radial-gradient(ellipse at 75% 80%, rgba({{C_SEA_RGB}},0.14), transparent 55%),
-      linear-gradient(var(--bg-0), var(--bg-0));
-  }
-  /* the "featured" card, adopted from the reference — a real photo + a real
-     day's name, floating over the atmospheric background photo */
-  .hero-card{
-    background:#fff; border-radius:22px; width:min(370px, 78vw);
-    padding:10px 10px 26px; box-shadow:0 26px 60px -18px rgba(0,0,0,.4);
-  }
-  .hero-card-photo{ border-radius:16px; overflow:hidden; aspect-ratio:4/3; margin-bottom:18px; background:var(--bg-1); }
-  .hero-card-photo img{ width:100%; height:100%; object-fit:cover; display:block; }
-  .hero-card-title{ font-family:'Rubik',sans-serif; font-weight:800; font-size:1.35rem; color:var(--ink); padding:0 18px; line-height:1.28; }
-  #hero .cue{
-    position:absolute; bottom:34px; right:50%; transform:translateX(50%);
-    color:var(--ink-dim); font-size:0.9rem; display:flex; flex-direction:column; align-items:center; gap:8px;
-  }
-  #hero .cue .arrow{ width:1px; height:40px; background:linear-gradient(var(--turquoise), transparent); }
-  @media(max-width:860px){ #hero{ position:static; min-height:70vh; } }
+      /* ---------- HERO — a sticky photographic moment the timeline scrolls over,
+         not a second place for the title (that lives in the sidebar) ---------- */
+      #hero{
+        position:sticky; top:0; z-index:0; min-height:100vh;
+        display:flex; flex-direction:column; align-items:center; justify-content:center;
+        text-align:center; padding:80px 20px; overflow:hidden;
+        background-size:cover; background-position:center;
+        background-image:
+          radial-gradient(ellipse at 30% 20%, rgba({{C_TURQ_RGB}},0.16), transparent 55%),
+          radial-gradient(ellipse at 75% 80%, rgba({{C_SEA_RGB}},0.14), transparent 55%),
+          linear-gradient(var(--bg-0), var(--bg-0));
+      }
+      /* the "featured" card, adopted from the reference — a real photo + a real
+         day's name, floating over the atmospheric background photo */
+      .hero-card{
+        background:#fff; border-radius:22px; width:min(370px, 78vw);
+        padding:10px 10px 26px; box-shadow:0 26px 60px -18px rgba(0,0,0,.4);
+      }
+      .hero-card-photo{ border-radius:16px; overflow:hidden; aspect-ratio:4/3; margin-bottom:18px; background:var(--bg-1); }
+      .hero-card-photo img{ width:100%; height:100%; object-fit:cover; display:block; }
+      .hero-card-title{ font-family:'Rubik',sans-serif; font-weight:800; font-size:1.35rem; color:var(--ink); padding:0 18px; line-height:1.28; }
+      #hero .cue{
+        position:absolute; bottom:34px; right:50%; transform:translateX(50%);
+        color:var(--ink-dim); font-size:0.9rem; display:flex; flex-direction:column; align-items:center; gap:8px;
+      }
+      #hero .cue .arrow{ width:1px; height:40px; background:linear-gradient(var(--turquoise), transparent); }
+      @media(max-width:860px){ #hero{ position:static; min-height:70vh; } }
 
-  /* ---------- MAP (unchanged) — real, live OpenStreetMap tiles via Leaflet ---------- */
-  .map-wrap{ display:flex; justify-content:center; margin:36px auto 0; max-width:640px; }
-  .realmap{
-    position:relative; width:100%; height:300px; border-radius:16px; overflow:hidden;
-    border:1px solid var(--line); box-shadow:var(--shadow); background:var(--bg-2);
-  }
-  .realmap .leaflet-container{ background:var(--bg-2); font-family:'Heebo',sans-serif; }
-  .realmap .leaflet-tile-pane{ filter: saturate(0.9) brightness(1.02); }
-  .realmap .leaflet-control-attribution{ background:rgba(255,255,255,.75); color:var(--ink-dim); font-size:9px; }
-  .realmap .leaflet-control-attribution a{ color:var(--ink-dim); }
-  .map-label-icon{ background:none!important; border:none!important; width:0!important; height:0!important; overflow:visible!important; }
-  .map-label{
-    position:absolute; top:0; left:0; white-space:nowrap; pointer-events:none;
-    background:rgba(255,255,255,.9); border:1px solid var(--line); color:var(--ink-dim);
-    font-family:'IBM Plex Mono',monospace; font-size:10.5px; padding:3px 8px; border-radius:6px;
-  }
-  .map-label.lbl-top  { transform:translate(-50%, calc(-100% - 11px)); }
-  .map-label.lbl-right{ transform:translate(12px, -50%); }
-  .map-label.lbl-left { transform:translate(calc(-100% - 12px), -50%); }
-  .map-label.active{ color:var(--ink); border-color:var(--turquoise); font-weight:600; }
-  .veh-icon{ pointer-events:none; }
-  .veh-icon .veh-svg{ display:block; filter:drop-shadow(0 0 4px rgba(255,255,255,.95)) drop-shadow(0 1px 2px rgba(0,0,0,.4)); transition:transform .08s linear; }
-  .fog-icon{ pointer-events:none; }
-  .fog-badge{
-    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
-    font-size:22px; line-height:1; color:#5b7c7f; filter:drop-shadow(0 0 10px rgba(255,255,255,.95));
-    animation:fogpulse 2.6s ease-in-out infinite;
-  }
-  .fog-badge span{ font-family:'IBM Plex Mono',monospace; font-size:9px; color:var(--ink-dim); background:rgba(255,255,255,.82); padding:1px 6px; border-radius:5px; }
-  @keyframes fogpulse{ 0%,100%{ opacity:.5; transform:scale(.9); } 50%{ opacity:1; transform:scale(1.08); } }
+      /* ---------- MAP (unchanged) — real, live OpenStreetMap tiles via Leaflet ---------- */
+      .map-wrap{ display:flex; justify-content:center; margin:36px auto 0; max-width:640px; }
+      .realmap{
+        position:relative; width:100%; height:300px; border-radius:16px; overflow:hidden;
+        border:1px solid var(--line); box-shadow:var(--shadow); background:var(--bg-2);
+      }
+      .realmap .leaflet-container{ background:var(--bg-2); font-family:'Heebo',sans-serif; }
+      .realmap .leaflet-tile-pane{ filter: saturate(0.9) brightness(1.02); }
+      .realmap .leaflet-control-attribution{ background:rgba(255,255,255,.75); color:var(--ink-dim); font-size:9px; }
+      .realmap .leaflet-control-attribution a{ color:var(--ink-dim); }
+      .map-label-icon{ background:none!important; border:none!important; width:0!important; height:0!important; overflow:visible!important; }
+      .map-label{
+        position:absolute; top:0; left:0; white-space:nowrap; pointer-events:none;
+        background:rgba(255,255,255,.9); border:1px solid var(--line); color:var(--ink-dim);
+        font-family:'IBM Plex Mono',monospace; font-size:10.5px; padding:3px 8px; border-radius:6px;
+      }
+      .map-label.lbl-top  { transform:translate(-50%, calc(-100% - 11px)); }
+      .map-label.lbl-right{ transform:translate(12px, -50%); }
+      .map-label.lbl-left { transform:translate(calc(-100% - 12px), -50%); }
+      .map-label.active{ color:var(--ink); border-color:var(--turquoise); font-weight:600; }
+      .veh-icon{ pointer-events:none; }
+      .veh-icon .veh-svg{ display:block; filter:drop-shadow(0 0 4px rgba(255,255,255,.95)) drop-shadow(0 1px 2px rgba(0,0,0,.4)); transition:transform .08s linear; }
+      .fog-icon{ pointer-events:none; }
+      .fog-badge{
+        display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+        font-size:22px; line-height:1; color:#5b7c7f; filter:drop-shadow(0 0 10px rgba(255,255,255,.95));
+        animation:fogpulse 2.6s ease-in-out infinite;
+      }
+      .fog-badge span{ font-family:'IBM Plex Mono',monospace; font-size:9px; color:var(--ink-dim); background:rgba(255,255,255,.82); padding:1px 6px; border-radius:5px; }
+      @keyframes fogpulse{ 0%,100%{ opacity:.5; transform:scale(.9); } 50%{ opacity:1; transform:scale(1.08); } }
 
-  /* ---------- route legs ---------- */
-  .leg{ display:inline-flex; align-items:center; gap:.45em; flex-wrap:wrap; justify-content:center; direction:rtl; }
-  .leg > span{ unicode-bidi:isolate; }
-  .leg .leg-arrow{ color:var(--turquoise-deep); font-weight:400; opacity:.7; }
-  .route .leg{ font-family:'IBM Plex Mono',monospace; font-size:.95em; }
-  .route .route-sep{ margin:0 .5em; opacity:.5; }
+      /* ---------- route legs ---------- */
+      .leg{ display:inline-flex; align-items:center; gap:.45em; flex-wrap:wrap; justify-content:center; direction:rtl; }
+      .leg > span{ unicode-bidi:isolate; }
+      .leg .leg-arrow{ color:var(--turquoise-deep); font-weight:400; opacity:.7; }
+      .route .leg{ font-family:'IBM Plex Mono',monospace; font-size:.95em; }
+      .route .route-sep{ margin:0 .5em; opacity:.5; }
 
-  /* ---------- TRANSIT — stays light: the "in-between" mood ---------- */
-  .transit{ position:relative; z-index:1; padding:96px 0; text-align:center; background:var(--bg-0); border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
-  .transit .kicker{ color:var(--muted); font-size:0.85rem; }
-  .transit h2{ font-size:clamp(1.8rem,3.4vw,2.4rem); margin:8px 0 4px; }
-  .transit .route{ color:var(--ink-dim); font-size:1.05rem; }
-  .transit .note{ margin-top:18px; color:var(--muted); font-size:0.92rem; max-width:480px; margin-inline:auto; }
+      /* ---------- TRANSIT — stays light: the "in-between" mood ---------- */
+      .transit{ position:relative; z-index:1; padding:96px 0; text-align:center; background:var(--bg-0); border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+      .transit .kicker{ color:var(--muted); font-size:0.85rem; }
+      .transit h2{ font-size:clamp(1.8rem,3.4vw,2.4rem); margin:8px 0 4px; }
+      .transit .route{ color:var(--ink-dim); font-size:1.05rem; }
+      .transit .note{ margin-top:18px; color:var(--muted); font-size:0.92rem; max-width:480px; margin-inline:auto; }
 
-  /* ---------- DRAMA — stays light, keeps its own accent ---------- */
-  #drama{
-    position:relative; z-index:1; background:radial-gradient(ellipse at 50% 0%, rgba(196,90,74,0.12), transparent 60%), var(--bg-0);
-    padding:130px 0; text-align:center; border-top:1px solid var(--line); border-bottom:1px solid var(--line);
-  }
-  #drama .eyebrow{ color:#C1584A; }
-  #drama h2{ font-size:clamp(1rem, 4.2vw, 2.3rem); max-width:720px; margin:0 auto 22px; }
-  #drama h2 .leg{ flex-wrap:nowrap; white-space:nowrap; gap:.32em; }
-  #drama p{ max-width:560px; margin:0 auto 14px; color:var(--ink-dim); font-size:1.05rem; }
-  #drama .badge{ display:inline-block; margin-top:26px; padding:10px 22px; border:1px solid rgba(193,88,74,.45); border-radius:999px; color:#C1584A; font-size:0.85rem; letter-spacing:.03em; }
+      /* ---------- DRAMA — stays light, keeps its own accent ---------- */
+      #drama{
+        position:relative; z-index:1; background:radial-gradient(ellipse at 50% 0%, rgba(196,90,74,0.12), transparent 60%), var(--bg-0);
+        padding:130px 0; text-align:center; border-top:1px solid var(--line); border-bottom:1px solid var(--line);
+      }
+      #drama .eyebrow{ color:#C1584A; }
+      #drama h2{ font-size:clamp(1rem, 4.2vw, 2.3rem); max-width:720px; margin:0 auto 22px; }
+      #drama h2 .leg{ flex-wrap:nowrap; white-space:nowrap; gap:.32em; }
+      #drama p{ max-width:560px; margin:0 auto 14px; color:var(--ink-dim); font-size:1.05rem; }
+      #drama .badge{ display:inline-block; margin-top:26px; padding:10px 22px; border:1px solid rgba(193,88,74,.45); border-radius:999px; color:#C1584A; font-size:0.85rem; letter-spacing:.03em; }
 
-  /* ---------- DAY / STAY — the adopted "itinerary row": a dark, immersive
-     section per place, headed by a big running number and a dashed rule,
-     the way the reference groups every leg of the trip ---------- */
-  .stay{
-    position:relative; z-index:1; padding:100px 0; background:var(--dark-bg); color:var(--dark-fg);
-  }
-  .stay .lede, .stay .tags .tag{ color:var(--dark-fg); }
-  .stay-head{ display:flex; align-items:flex-end; gap:24px; padding-bottom:22px; margin-bottom:30px; border-bottom:2px dashed var(--dark-line); flex-wrap:wrap; }
-  .stay-head .daynum{ font-family:'IBM Plex Mono',monospace; direction:ltr; font-size:clamp(3rem,7vw,5rem); line-height:0.85; color:var(--dark-fg); opacity:.9; }
-  .stay-head .daynum small{ font-size:0.35em; opacity:.6; }
-  .stay-head .headtext{ flex:1 1 260px; }
-  .stay-head .dates{ display:block; font-family:'IBM Plex Mono',monospace; direction:ltr; unicode-bidi:embed; color:var(--dark-muted); font-size:0.85rem; margin-bottom:8px; }
-  .stay-head .isl{ color:var(--dark-muted); font-size:0.92rem; margin-bottom:4px; display:block; }
-  .stay-head h2{ font-size:clamp(1.9rem,4.2vw,2.8rem); color:var(--dark-fg); }
-  .stay .lede{ max-width:640px; margin-bottom:26px; font-size:1.05rem; opacity:.92; }
-  .about{
-    max-width:640px; margin-bottom:34px; padding:16px 20px; font-size:0.98rem; line-height:1.75;
-    color:var(--dark-fg); opacity:.85; background:rgba({{C_DARK_FG_RGB}},0.06); border-radius:14px;
-    border-inline-start:3px solid var(--dark-muted);
-  }
-  .about .about-k{ display:block; font-size:0.78rem; color:var(--dark-muted); margin-bottom:6px; }
-  .lodging-card{
-    display:flex; gap:22px; align-items:center; background:rgba({{C_DARK_FG_RGB}},0.06); border:1px solid var(--dark-line);
-    border-radius:18px; padding:20px 24px; margin-bottom:38px; flex-wrap:wrap;
-  }
-  .lodging-card .ic{ font-size:1.6rem; }
-  .lodging-card .info b{ display:block; font-size:1.05rem; margin-bottom:2px; color:var(--dark-fg); }
-  .lodging-card .info span{ color:var(--dark-muted); font-size:0.88rem; }
-  .lodging-card .info .host-link{
-    display:block; font-size:1.05rem; margin-bottom:2px; font-weight:600;
-    color:var(--dark-fg); text-decoration:none; border-bottom:1px solid var(--dark-muted);
-  }
-  .lodging-card .code{ margin-inline-start:auto; font-family:'IBM Plex Mono',monospace; direction:ltr; color:var(--dark-fg); font-size:0.82rem; background:rgba({{C_DARK_FG_RGB}},0.12); padding:6px 12px; border-radius:8px; }
-  .gallery-label{ color:var(--dark-muted); font-size:0.78rem; letter-spacing:.04em; margin:22px 0 10px; }
-  .gallery-label:first-of-type{ margin-top:0; }
-  .gallery{ display:grid; grid-template-columns:repeat(auto-fill, minmax(150px,1fr)); gap:12px; margin-bottom:36px; }
-  .ph{
-    aspect-ratio:4/5; border-radius:12px; border:1.5px dashed var(--dark-line);
-    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;
-    color:var(--dark-muted); font-size:0.78rem; background:rgba({{C_DARK_FG_RGB}},0.04);
-    text-align:center; padding:8px;
-  }
-  .ph .icon{ font-size:1.4rem; opacity:.6; }
-  .ph.img-set{ border-style:solid; overflow:hidden; padding:0; }
-  .ph.img-set img{ width:100%; height:100%; object-fit:cover; }
-  .tags{ display:flex; flex-wrap:wrap; gap:10px; }
-  .tag{ border:1px solid var(--dark-line); border-radius:999px; padding:9px 18px; font-size:0.88rem; background:rgba({{C_DARK_FG_RGB}},0.05); }
-  .tag b{ color:var(--dark-fg); font-weight:600; }
-  /* layover: a lighter one-off waypoint, not a full dark "day" — keeps it visually
-     distinct from an overnight stay, same idea as the transit sections */
-  .stay.layover{ background:var(--bg-1); color:var(--ink); }
-  .stay.layover .lede, .stay.layover .tags .tag{ color:var(--ink-dim); }
-  .stay.layover .stay-head{ border-bottom-color:rgba({{C_INK_RGB}},.22); }
-  .stay.layover .stay-head .daynum{ color:var(--turquoise-deep); opacity:1; }
-  .stay.layover .stay-head .dates, .stay.layover .stay-head .isl{ color:var(--muted); }
-  .stay.layover .stay-head h2{ color:var(--ink); }
-  .stay.layover .about{ color:var(--ink-dim); background:var(--bg-3); border-inline-start-color:var(--turquoise); }
-  .stay.layover .about .about-k{ color:var(--turquoise-deep); }
-  .stay.layover .lodging-card{ background:var(--bg-2); border-color:var(--line); }
-  .stay.layover .lodging-card .info b, .stay.layover .lodging-card .info .host-link{ color:var(--ink); }
-  .stay.layover .ph{ border-color:var(--line); background:linear-gradient(160deg, var(--bg-2), var(--bg-1)); color:var(--muted); }
-  .stay.layover .tag{ border-color:var(--line); background:var(--bg-2); color:var(--ink-dim); }
+      /* ---------- DAY / STAY — the adopted "itinerary row": a dark, immersive
+         section per place, headed by a big running number and a dashed rule,
+         the way the reference groups every leg of the trip ---------- */
+      .stay{
+        position:relative; z-index:1; padding:100px 0; background:var(--dark-bg); color:var(--dark-fg);
+      }
+      .stay .lede, .stay .tags .tag{ color:var(--dark-fg); }
+      .stay-head{ display:flex; align-items:flex-end; gap:24px; padding-bottom:22px; margin-bottom:30px; border-bottom:2px dashed var(--dark-line); flex-wrap:wrap; }
+      .stay-head .daynum{ font-family:'IBM Plex Mono',monospace; direction:ltr; font-size:clamp(3rem,7vw,5rem); line-height:0.85; color:var(--dark-fg); opacity:.9; }
+      .stay-head .daynum small{ font-size:0.35em; opacity:.6; }
+      .stay-head .headtext{ flex:1 1 260px; }
+      .stay-head .dates{ display:block; font-family:'IBM Plex Mono',monospace; direction:ltr; unicode-bidi:embed; color:var(--dark-muted); font-size:0.85rem; margin-bottom:8px; }
+      .stay-head .isl{ color:var(--dark-muted); font-size:0.92rem; margin-bottom:4px; display:block; }
+      .stay-head h2{ font-size:clamp(1.9rem,4.2vw,2.8rem); color:var(--dark-fg); }
+      .stay .lede{ max-width:640px; margin-bottom:26px; font-size:1.05rem; opacity:.92; }
+      .about{
+        max-width:640px; margin-bottom:34px; padding:16px 20px; font-size:0.98rem; line-height:1.75;
+        color:var(--dark-fg); opacity:.85; background:rgba({{C_DARK_FG_RGB}},0.06); border-radius:14px;
+        border-inline-start:3px solid var(--dark-muted);
+      }
+      .about .about-k{ display:block; font-size:0.78rem; color:var(--dark-muted); margin-bottom:6px; }
+      .lodging-card{
+        display:flex; gap:22px; align-items:center; background:rgba({{C_DARK_FG_RGB}},0.06); border:1px solid var(--dark-line);
+        border-radius:18px; padding:20px 24px; margin-bottom:38px; flex-wrap:wrap;
+      }
+      .lodging-card .ic{ font-size:1.6rem; }
+      .lodging-card .info b{ display:block; font-size:1.05rem; margin-bottom:2px; color:var(--dark-fg); }
+      .lodging-card .info span{ color:var(--dark-muted); font-size:0.88rem; }
+      .lodging-card .info .host-link{
+        display:block; font-size:1.05rem; margin-bottom:2px; font-weight:600;
+        color:var(--dark-fg); text-decoration:none; border-bottom:1px solid var(--dark-muted);
+      }
+      .lodging-card .code{ margin-inline-start:auto; font-family:'IBM Plex Mono',monospace; direction:ltr; color:var(--dark-fg); font-size:0.82rem; background:rgba({{C_DARK_FG_RGB}},0.12); padding:6px 12px; border-radius:8px; }
+      .gallery-label{ color:var(--dark-muted); font-size:0.78rem; letter-spacing:.04em; margin:22px 0 10px; }
+      .gallery-label:first-of-type{ margin-top:0; }
+      .gallery{ display:grid; grid-template-columns:repeat(auto-fill, minmax(150px,1fr)); gap:12px; margin-bottom:36px; }
+      .ph{
+        aspect-ratio:4/5; border-radius:12px; border:1.5px dashed var(--dark-line);
+        display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;
+        color:var(--dark-muted); font-size:0.78rem; background:rgba({{C_DARK_FG_RGB}},0.04);
+        text-align:center; padding:8px;
+      }
+      .ph .icon{ font-size:1.4rem; opacity:.6; }
+      .ph.img-set{ border-style:solid; overflow:hidden; padding:0; }
+      .ph.img-set img{ width:100%; height:100%; object-fit:cover; }
+      .tags{ display:flex; flex-wrap:wrap; gap:10px; }
+      .tag{ border:1px solid var(--dark-line); border-radius:999px; padding:9px 18px; font-size:0.88rem; background:rgba({{C_DARK_FG_RGB}},0.05); }
+      .tag b{ color:var(--dark-fg); font-weight:600; }
+      /* layover: a lighter one-off waypoint, not a full dark "day" — keeps it visually
+         distinct from an overnight stay, same idea as the transit sections */
+      .stay.layover{ background:var(--bg-1); color:var(--ink); }
+      .stay.layover .lede, .stay.layover .tags .tag{ color:var(--ink-dim); }
+      .stay.layover .stay-head{ border-bottom-color:rgba({{C_INK_RGB}},.22); }
+      .stay.layover .stay-head .daynum{ color:var(--turquoise-deep); opacity:1; }
+      .stay.layover .stay-head .dates, .stay.layover .stay-head .isl{ color:var(--muted); }
+      .stay.layover .stay-head h2{ color:var(--ink); }
+      .stay.layover .about{ color:var(--ink-dim); background:var(--bg-3); border-inline-start-color:var(--turquoise); }
+      .stay.layover .about .about-k{ color:var(--turquoise-deep); }
+      .stay.layover .lodging-card{ background:var(--bg-2); border-color:var(--line); }
+      .stay.layover .lodging-card .info b, .stay.layover .lodging-card .info .host-link{ color:var(--ink); }
+      .stay.layover .ph{ border-color:var(--line); background:linear-gradient(160deg, var(--bg-2), var(--bg-1)); color:var(--muted); }
+      .stay.layover .tag{ border-color:var(--line); background:var(--bg-2); color:var(--ink-dim); }
 
-  /* ---------- landscape divider — a one-time transition before the closing
-     section, adapted from the reference's hand-drawn section border ---------- */
-  .landscape-divider{ position:relative; z-index:1; height:90px; background:var(--dark-bg); overflow:hidden; }
-  .landscape-divider svg{ position:absolute; bottom:-1px; width:100%; height:100px; }
+      /* ---------- landscape divider — a one-time transition before the closing
+         section, adapted from the reference's hand-drawn section border ---------- */
+      .landscape-divider{ position:relative; z-index:1; height:90px; background:var(--dark-bg); overflow:hidden; }
+      .landscape-divider svg{ position:absolute; bottom:-1px; width:100%; height:100px; }
 
-  /* ---------- OUTRO — the closing statement, Figma-style: kicker + one big line ---------- */
-  #outro{
-    position:relative; z-index:1; padding:140px 0 110px; text-align:center;
-    background:radial-gradient(ellipse at 50% 100%, rgba({{C_SEA_RGB}},0.12), transparent 60%), var(--bg-0);
-  }
-  #outro h2{ font-size:clamp(2.6rem,6.4vw,4.4rem); margin-bottom:18px; line-height:1.02; }
-  #outro p{ color:var(--ink-dim); max-width:520px; margin:0 auto; }
-  #outro .stat-row{ display:flex; justify-content:center; gap:40px; margin-top:50px; flex-wrap:wrap; }
-  #outro .stat-row .n{ font-family:'IBM Plex Mono',monospace; direction:ltr; font-size:1.8rem; color:var(--turquoise-deep); }
-  #outro .stat-row .l{ font-size:0.8rem; color:var(--muted); }
+      /* ---------- OUTRO — the closing statement, Figma-style: kicker + one big line ---------- */
+      #outro{
+        position:relative; z-index:1; padding:140px 0 110px; text-align:center;
+        background:radial-gradient(ellipse at 50% 100%, rgba({{C_SEA_RGB}},0.12), transparent 60%), var(--bg-0);
+      }
+      #outro h2{ font-size:clamp(2.6rem,6.4vw,4.4rem); margin-bottom:18px; line-height:1.02; }
+      #outro p{ color:var(--ink-dim); max-width:520px; margin:0 auto; }
+      #outro .stat-row{ display:flex; justify-content:center; gap:40px; margin-top:50px; flex-wrap:wrap; }
+      #outro .stat-row .n{ font-family:'IBM Plex Mono',monospace; direction:ltr; font-size:1.8rem; color:var(--turquoise-deep); }
+      #outro .stat-row .l{ font-size:0.8rem; color:var(--muted); }
 
-  /* ---------- ECONOMICS ---------- */
-  #economics{ position:relative; z-index:1; padding:120px 0; background:var(--bg-1); border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
-  #economics .eyebrow{ color:var(--sea-deep); }
-  #economics h2{ font-size:clamp(2rem,4.6vw,2.8rem); margin:6px 0 12px; }
-  #economics .intro{ color:var(--ink-dim); max-width:620px; font-size:1.05rem; margin-bottom:42px; }
-  .fin-big{ display:flex; flex-wrap:wrap; gap:14px; margin-bottom:46px; }
-  .fin-big .bn{ flex:1 1 190px; background:var(--bg-2); border:1px solid var(--line); border-radius:16px; padding:20px 22px; }
-  .fin-big .bn .v{ font-family:'Rubik',sans-serif; font-weight:800; font-size:1.8rem; color:var(--turquoise-deep); line-height:1.1; }
-  .fin-big .bn .k{ color:var(--muted); font-size:0.84rem; margin-top:6px; }
-  .fin-bars{ max-width:680px; margin-bottom:46px; }
-  .fin-bars .row{ margin-bottom:15px; }
-  .fin-bars .bh{ display:flex; justify-content:space-between; align-items:baseline; font-size:0.92rem; margin-bottom:5px; }
-  .fin-bars .bh .amt{ font-family:'IBM Plex Mono',monospace; direction:ltr; unicode-bidi:embed; color:var(--muted); font-size:0.86rem; }
-  .fin-bars .track{ height:12px; background:var(--bg-3); border-radius:999px; overflow:hidden; }
-  .fin-bars .fill{ height:100%; background:linear-gradient(270deg, var(--turquoise), var(--sea)); border-radius:999px; }
-  .fin-notes{ display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:16px; }
-  .fin-notes .fn{ background:var(--bg-2); border:1px solid var(--line); border-radius:14px; padding:18px 20px; font-size:0.95rem; color:var(--ink-dim); line-height:1.7; }
-  .fin-notes .fn b{ color:var(--ink); font-weight:600; }
-  .fin-notes .fn .fn-k{ display:block; font-size:0.72rem; color:var(--sea-deep); margin-bottom:6px; }
-  .fin-foot{ margin-top:34px; color:var(--muted); font-size:0.85rem; max-width:620px; }
-</style>
-</head>
-<body dir="rtl">
+      /* ---------- ECONOMICS ---------- */
+      #economics{ position:relative; z-index:1; padding:120px 0; background:var(--bg-1); border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+      #economics .eyebrow{ color:var(--sea-deep); }
+      #economics h2{ font-size:clamp(2rem,4.6vw,2.8rem); margin:6px 0 12px; }
+      #economics .intro{ color:var(--ink-dim); max-width:620px; font-size:1.05rem; margin-bottom:42px; }
+      .fin-big{ display:flex; flex-wrap:wrap; gap:14px; margin-bottom:46px; }
+      .fin-big .bn{ flex:1 1 190px; background:var(--bg-2); border:1px solid var(--line); border-radius:16px; padding:20px 22px; }
+      .fin-big .bn .v{ font-family:'Rubik',sans-serif; font-weight:800; font-size:1.8rem; color:var(--turquoise-deep); line-height:1.1; }
+      .fin-big .bn .k{ color:var(--muted); font-size:0.84rem; margin-top:6px; }
+      .fin-bars{ max-width:680px; margin-bottom:46px; }
+      .fin-bars .row{ margin-bottom:15px; }
+      .fin-bars .bh{ display:flex; justify-content:space-between; align-items:baseline; font-size:0.92rem; margin-bottom:5px; }
+      .fin-bars .bh .amt{ font-family:'IBM Plex Mono',monospace; direction:ltr; unicode-bidi:embed; color:var(--muted); font-size:0.86rem; }
+      .fin-bars .track{ height:12px; background:var(--bg-3); border-radius:999px; overflow:hidden; }
+      .fin-bars .fill{ height:100%; background:linear-gradient(270deg, var(--turquoise), var(--sea)); border-radius:999px; }
+      .fin-notes{ display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:16px; }
+      .fin-notes .fn{ background:var(--bg-2); border:1px solid var(--line); border-radius:14px; padding:18px 20px; font-size:0.95rem; color:var(--ink-dim); line-height:1.7; }
+      .fin-notes .fn b{ color:var(--ink); font-weight:600; }
+      .fin-notes .fn .fn-k{ display:block; font-size:0.72rem; color:var(--sea-deep); margin-bottom:6px; }
+      .fin-foot{ margin-top:34px; color:var(--muted); font-size:0.85rem; max-width:620px; }
+    </style>
+  </head>
+  <body dir="rtl">
+    <aside id="sidebar">
+      <div class="wordmark display">{{HERO_H1}}</div>
+      <span class="eyebrow">{{HERO_EYEBROW}}</span>
+      <p class="tagline">{{HERO_SUB}}</p>
+      <div class="stats">{{HERO_META}}</div>
+    </aside>
 
-<aside id="sidebar">
-  <div class="wordmark display">{{HERO_H1}}</div>
-  <span class="eyebrow">{{HERO_EYEBROW}}</span>
-  <p class="tagline">{{HERO_SUB}}</p>
-  <div class="stats">
-{{HERO_META}}
-  </div>
-</aside>
+    <div id="rail"><div id="rail-fill"></div></div>
 
-<div id="rail"><div id="rail-fill"></div></div>
+    <div id="content">
+      <!-- ================= HERO ================= -->
+      <section id="hero">
+        <div class="hero-card" id="hero-card" hidden>
+          <div class="hero-card-photo"><img alt="" /></div>
+          <h3 class="hero-card-title">{{HERO_REGION}}</h3>
+        </div>
+        <div class="cue">
+          <span>גלול לתחילת המסע</span>
+          <div class="arrow"></div>
+        </div>
+      </section>
 
-<div id="content">
-  <!-- ================= HERO ================= -->
-  <section id="hero">
-    <div class="hero-card" id="hero-card" hidden>
-      <div class="hero-card-photo"><img alt=""></div>
-      <h3 class="hero-card-title">{{HERO_REGION}}</h3>
-    </div>
-    <div class="cue">
-      <span>גלול לתחילת המסע</span>
-      <div class="arrow"></div>
-    </div>
-  </section>
+      <!-- content is rendered here by JS -->
+      <div id="app"></div>
 
-  <!-- content is rendered here by JS -->
-  <div id="app"></div>
-
-  <div class="landscape-divider">
-    <svg viewBox="0 0 1200 100" preserveAspectRatio="none">
-      <path d="M0,60 C200,10 350,90 600,50 C850,15 1000,80 1200,40 L1200,100 L0,100 Z" fill="{{C_BG0}}"/>
-    </svg>
-  </div>
-
-  <!-- ================= OUTRO ================= -->
-  <section id="outro">
-    <div class="wrap">
-      <span class="eyebrow">{{OUTRO_EYEBROW}}</span>
-      <h2>{{OUTRO_H2}}</h2>
-      <p>{{OUTRO_P}}</p>
-      <div class="stat-row">
-{{OUTRO_STATS}}
+      <div class="landscape-divider">
+        <svg viewBox="0 0 1200 100" preserveAspectRatio="none">
+          <path
+            d="M0,60 C200,10 350,90 600,50 C850,15 1000,80 1200,40 L1200,100 L0,100 Z"
+            fill="{{C_BG0}}"
+          />
+        </svg>
       </div>
-    </div>
-  </section>
 
-  <!-- ================= ECONOMICS (bonus appendix) ================= -->
-  <section id="economics">
-    <div class="wrap">
-      <span class="eyebrow">{{ECON_EYEBROW}}</span>
-      <h2>{{ECON_H2}}</h2>
-      <p class="intro">{{ECON_INTRO}}</p>
-      <div class="fin-big">
-{{ECON_BIG}}
-      </div>
-      <div class="fin-bars">
-{{ECON_BARS}}
-      </div>
-      <div class="fin-notes">
-{{ECON_NOTES}}
-      </div>
-      <p class="fin-foot">{{ECON_FOOT}}</p>
-    </div>
-  </section>
-</div>
+      <!-- ================= OUTRO ================= -->
+      <section id="outro">
+        <div class="wrap">
+          <span class="eyebrow">{{OUTRO_EYEBROW}}</span>
+          <h2>{{OUTRO_H2}}</h2>
+          <p>{{OUTRO_P}}</p>
+          <div class="stat-row">{{OUTRO_STATS}}</div>
+        </div>
+      </section>
 
-<script>
-/* =========================================================
+      <!-- ================= ECONOMICS (bonus appendix) ================= -->
+      <section id="economics">
+        <div class="wrap">
+          <span class="eyebrow">{{ECON_EYEBROW}}</span>
+          <h2>{{ECON_H2}}</h2>
+          <p class="intro">{{ECON_INTRO}}</p>
+          <div class="fin-big">{{ECON_BIG}}</div>
+          <div class="fin-bars">{{ECON_BARS}}</div>
+          <div class="fin-notes">{{ECON_NOTES}}</div>
+          <p class="fin-foot">{{ECON_FOOT}}</p>
+        </div>
+      </section>
+    </div>
+
+    <script>
+      /* =========================================================
    DATA MODEL — unchanged from the base template
    ========================================================= */
-const LOCATIONS = {{LOCATIONS_JSON}};
-const PHOTOS = {{PHOTOS_JSON}};
-// the 2 best scenic photos for the hero, picked by the pipeline from the whole
-// trip (not just day 1) - best-first: [0] -> background, [1] -> the featured card
-const HERO_PHOTOS = {{HERO_PHOTOS_JSON}};
+      const LOCATIONS = {{LOCATIONS_JSON}};
+      const PHOTOS = {{PHOTOS_JSON}};
+      // the 2 best scenic photos for the hero, picked by the pipeline from the whole
+      // trip (not just day 1) - best-first: [0] -> background, [1] -> the featured card
+      const HERO_PHOTOS = {{HERO_PHOTOS_JSON}};
 
-function curvePoints(from, to, bend, n){
-  const mLat = (from.lat+to.lat)/2 + bend, mLon = (from.lon+to.lon)/2;
-  const pts = [];
-  for(let i=0;i<=n;i++){
-    const t = i/n;
-    const lat = (1-t)*(1-t)*from.lat + 2*(1-t)*t*mLat + t*t*to.lat;
-    const lon = (1-t)*(1-t)*from.lon + 2*(1-t)*t*mLon + t*t*to.lon;
-    pts.push([lat, lon]);
-  }
-  return pts;
-}
+      function curvePoints(from, to, bend, n) {
+        const mLat = (from.lat + to.lat) / 2 + bend,
+          mLon = (from.lon + to.lon) / 2;
+        const pts = [];
+        for (let i = 0; i <= n; i++) {
+          const t = i / n;
+          const lat = (1 - t) * (1 - t) * from.lat + 2 * (1 - t) * t * mLat + t * t * to.lat;
+          const lon = (1 - t) * (1 - t) * from.lon + 2 * (1 - t) * t * mLon + t * t * to.lon;
+          pts.push([lat, lon]);
+        }
+        return pts;
+      }
 
-const PLANE_SVG = `<svg class="veh-svg" width="32" height="32" viewBox="-14 -14 28 28"><path d="M13,0 L4.5,-1.5 L2.5,-1.8 L-2.5,-10 L-4,-10 L-3.5,-2 L-8,-1.6 L-9,-4.6 L-10.4,-4.6 L-10.8,-1.3 L-12,-0.8 L-12,0.8 L-10.8,1.3 L-10.4,4.6 L-9,4.6 L-8,1.6 L-3.5,2 L-4,10 L-2.5,10 L2.5,1.8 L4.5,1.5 Z" fill="{{C_INK}}"/></svg>`;
-const FERRY_SVG = `<svg class="veh-svg" width="32" height="32" viewBox="-16 -16 32 32"><path d="M-12,-2 L10,-2 L14.5,0.4 L9.5,2.9 L-10.5,2.9 L-12,0.7 Z M-8,-2 L-8,-7.4 L3.4,-7.4 L3.4,-4.7 L6.8,-4.7 L6.8,-2 Z M-6,-7.4 L-6,-10.6 L-3,-10.6 L-3,-7.4 Z" fill="{{C_SEA_DEEP}}"/><g fill="#EAF3F5"><rect x="-9.2" y="-0.1" width="1.7" height="1.7"/><rect x="-5.7" y="-0.1" width="1.7" height="1.7"/><rect x="-2.2" y="-0.1" width="1.7" height="1.7"/><rect x="1.3" y="-0.1" width="1.7" height="1.7"/><rect x="-6.6" y="-5.8" width="1.5" height="1.5"/><rect x="-3.1" y="-5.8" width="1.5" height="1.5"/><rect x="0.4" y="-5.8" width="1.5" height="1.5"/></g></svg>`;
+      const PLANE_SVG = `<svg class="veh-svg" width="32" height="32" viewBox="-14 -14 28 28"><path d="M13,0 L4.5,-1.5 L2.5,-1.8 L-2.5,-10 L-4,-10 L-3.5,-2 L-8,-1.6 L-9,-4.6 L-10.4,-4.6 L-10.8,-1.3 L-12,-0.8 L-12,0.8 L-10.8,1.3 L-10.4,4.6 L-9,4.6 L-8,1.6 L-3.5,2 L-4,10 L-2.5,10 L2.5,1.8 L4.5,1.5 Z" fill="{{C_INK}}"/></svg>`;
+      const FERRY_SVG = `<svg class="veh-svg" width="32" height="32" viewBox="-16 -16 32 32"><path d="M-12,-2 L10,-2 L14.5,0.4 L9.5,2.9 L-10.5,2.9 L-12,0.7 Z M-8,-2 L-8,-7.4 L3.4,-7.4 L3.4,-4.7 L6.8,-4.7 L6.8,-2 Z M-6,-7.4 L-6,-10.6 L-3,-10.6 L-3,-7.4 Z" fill="{{C_SEA_DEEP}}"/><g fill="#EAF3F5"><rect x="-9.2" y="-0.1" width="1.7" height="1.7"/><rect x="-5.7" y="-0.1" width="1.7" height="1.7"/><rect x="-2.2" y="-0.1" width="1.7" height="1.7"/><rect x="1.3" y="-0.1" width="1.7" height="1.7"/><rect x="-6.6" y="-5.8" width="1.5" height="1.5"/><rect x="-3.1" y="-5.8" width="1.5" height="1.5"/><rect x="0.4" y="-5.8" width="1.5" height="1.5"/></g></svg>`;
 
-const activeMaps = {};
+      const activeMaps = {};
 
-function buildMap(id, fromKey, toKey, mode, opts){
-  opts = opts || {};
-  const roundtrip = (opts.roundtrip === true || opts.roundtrip === "true");
-  const viaKey = (opts.via && LOCATIONS[opts.via]) ? opts.via : null;
-  try{
-    let frame = opts.frame;
-    if(typeof frame === "string"){ try{ frame = JSON.parse(frame); }catch(e){ frame = []; } }
-    const keys = [...new Set([fromKey, toKey, viaKey, ...(Array.isArray(frame) ? frame : [])]
-      .filter(k => k && LOCATIONS[k]))];
-    const from = LOCATIONS[fromKey], to = LOCATIONS[toKey];
-    let path;
-    if(viaKey){
-      const via = LOCATIONS[viaKey];
-      const arc = (a,b,mul)=> curvePoints(a, b, Math.max(Math.abs(b.lon-a.lon), Math.abs(b.lat-a.lat)) * mul, 40);
-      path = arc(from, via, 0.08).concat(arc(via, to, 0.05));
-    } else {
-      const bend = -Math.max(Math.abs(to.lon-from.lon), Math.abs(to.lat-from.lat)) * 0.20;
-      path = curvePoints(from, to, bend, 60);
-      if(roundtrip){ path = path.concat(curvePoints(to, from, -bend, 60)); }
-    }
-    const container = document.getElementById('map-'+id);
-    if(!container || activeMaps[id]) return;
+      function buildMap(id, fromKey, toKey, mode, opts) {
+        opts = opts || {};
+        const roundtrip = opts.roundtrip === true || opts.roundtrip === "true";
+        const viaKey = opts.via && LOCATIONS[opts.via] ? opts.via : null;
+        try {
+          let frame = opts.frame;
+          if (typeof frame === "string") {
+            try {
+              frame = JSON.parse(frame);
+            } catch (e) {
+              frame = [];
+            }
+          }
+          const keys = [
+            ...new Set(
+              [fromKey, toKey, viaKey, ...(Array.isArray(frame) ? frame : [])].filter(
+                (k) => k && LOCATIONS[k],
+              ),
+            ),
+          ];
+          const from = LOCATIONS[fromKey],
+            to = LOCATIONS[toKey];
+          let path;
+          if (viaKey) {
+            const via = LOCATIONS[viaKey];
+            const arc = (a, b, mul) =>
+              curvePoints(
+                a,
+                b,
+                Math.max(Math.abs(b.lon - a.lon), Math.abs(b.lat - a.lat)) * mul,
+                40,
+              );
+            path = arc(from, via, 0.08).concat(arc(via, to, 0.05));
+          } else {
+            const bend = -Math.max(Math.abs(to.lon - from.lon), Math.abs(to.lat - from.lat)) * 0.2;
+            path = curvePoints(from, to, bend, 60);
+            if (roundtrip) {
+              path = path.concat(curvePoints(to, from, -bend, 60));
+            }
+          }
+          const container = document.getElementById("map-" + id);
+          if (!container || activeMaps[id]) return;
 
-    const map = L.map(container, {
-      zoomControl:false, dragging:false, scrollWheelZoom:false, doubleClickZoom:false,
-      boxZoom:false, keyboard:false, tap:false, attributionControl:true
-    });
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution:'&copy; OpenStreetMap contributors', maxZoom:19
-    }).addTo(map);
+          const map = L.map(container, {
+            zoomControl: false,
+            dragging: false,
+            scrollWheelZoom: false,
+            doubleClickZoom: false,
+            boxZoom: false,
+            keyboard: false,
+            tap: false,
+            attributionControl: true,
+          });
+          L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            attribution: "&copy; OpenStreetMap contributors",
+            maxZoom: 19,
+          }).addTo(map);
 
-    const bounds = L.latLngBounds(keys.map(k=>[LOCATIONS[k].lat, LOCATIONS[k].lon]).concat(path));
-    map.fitBounds(bounds, {padding:[44,40]});
+          const bounds = L.latLngBounds(
+            keys.map((k) => [LOCATIONS[k].lat, LOCATIONS[k].lon]).concat(path),
+          );
+          map.fitBounds(bounds, { padding: [44, 40] });
 
-    const wideLeg = Math.abs(to.lon - from.lon) > 8;
-    const midLon = (from.lon + to.lon) / 2;
-    keys.forEach(k=>{
-      const loc = LOCATIONS[k];
-      const active = (k===fromKey || k===toKey || k===viaKey);
-      L.circleMarker([loc.lat, loc.lon], {
-        radius: active?7:5, weight:1.5,
-        color: active ? '{{C_INK}}' : '#6E8688',
-        fillColor: active ? '{{C_TURQ}}' : '#FFFFFF', fillOpacity:1
-      }).addTo(map);
-      const side = !wideLeg ? 'top' : (loc.lon >= midLon ? 'left' : 'right');
-      L.marker([loc.lat, loc.lon], {
-        interactive:false, keyboard:false,
-        icon: L.divIcon({
-          className:'map-label-icon', iconSize:[0,0], iconAnchor:[0,0],
-          html:`<span class="map-label lbl-${side}${active?' active':''}">${loc.label}</span>`
-        })
-      }).addTo(map);
-    });
+          const wideLeg = Math.abs(to.lon - from.lon) > 8;
+          const midLon = (from.lon + to.lon) / 2;
+          keys.forEach((k) => {
+            const loc = LOCATIONS[k];
+            const active = k === fromKey || k === toKey || k === viaKey;
+            L.circleMarker([loc.lat, loc.lon], {
+              radius: active ? 7 : 5,
+              weight: 1.5,
+              color: active ? "{{C_INK}}" : "#6E8688",
+              fillColor: active ? "{{C_TURQ}}" : "#FFFFFF",
+              fillOpacity: 1,
+            }).addTo(map);
+            const side = !wideLeg ? "top" : loc.lon >= midLon ? "left" : "right";
+            L.marker([loc.lat, loc.lon], {
+              interactive: false,
+              keyboard: false,
+              icon: L.divIcon({
+                className: "map-label-icon",
+                iconSize: [0, 0],
+                iconAnchor: [0, 0],
+                html: `<span class="map-label lbl-${side}${active ? " active" : ""}">${loc.label}</span>`,
+              }),
+            }).addTo(map);
+          });
 
-    L.polyline(path, {color:'{{C_TURQ}}', weight:2.4, dashArray:'5,7', opacity:.9}).addTo(map);
+          L.polyline(path, {
+            color: "{{C_TURQ}}",
+            weight: 2.4,
+            dashArray: "5,7",
+            opacity: 0.9,
+          }).addTo(map);
 
-    if(opts.fog && LOCATIONS[opts.fog]){
-      const f = LOCATIONS[opts.fog];
-      L.marker([f.lat, f.lon], {
-        interactive:false, zIndexOffset:1000,
-        icon: L.divIcon({ html:'<div class="fog-badge">☁<span>ערפל</span></div>', className:'fog-icon', iconSize:[52,52], iconAnchor:[26,26] })
-      }).addTo(map);
-    }
+          if (opts.fog && LOCATIONS[opts.fog]) {
+            const f = LOCATIONS[opts.fog];
+            L.marker([f.lat, f.lon], {
+              interactive: false,
+              zIndexOffset: 1000,
+              icon: L.divIcon({
+                html: '<div class="fog-badge">☁<span>ערפל</span></div>',
+                className: "fog-icon",
+                iconSize: [52, 52],
+                iconAnchor: [26, 26],
+              }),
+            }).addTo(map);
+          }
 
-    const icon = L.divIcon({ html: mode==='ferry'?FERRY_SVG:PLANE_SVG, className:'veh-icon', iconSize:[32,32], iconAnchor:[16,16] });
-    const marker = L.marker(path[0], {icon}).addTo(map);
+          const icon = L.divIcon({
+            html: mode === "ferry" ? FERRY_SVG : PLANE_SVG,
+            className: "veh-icon",
+            iconSize: [32, 32],
+            iconAnchor: [16, 16],
+          });
+          const marker = L.marker(path[0], { icon }).addTo(map);
 
-    activeMaps[id] = {map, marker, path, mode, visible:false, running:false, dur: roundtrip ? 4600 : (viaKey ? 3400 : 2600)};
-  } catch(err){
-    console.error('map init failed for', id, err);
-  }
-}
+          activeMaps[id] = {
+            map,
+            marker,
+            path,
+            mode,
+            visible: false,
+            running: false,
+            dur: roundtrip ? 4600 : viaKey ? 3400 : 2600,
+          };
+        } catch (err) {
+          console.error("map init failed for", id, err);
+        }
+      }
 
-function bearingPx(map, a, b){
-  const pa = map.latLngToContainerPoint(a), pb = map.latLngToContainerPoint(b);
-  return Math.atan2(pb.y-pa.y, pb.x-pa.x) * 180/Math.PI;
-}
+      function bearingPx(map, a, b) {
+        const pa = map.latLngToContainerPoint(a),
+          pb = map.latLngToContainerPoint(b);
+        return (Math.atan2(pb.y - pa.y, pb.x - pa.x) * 180) / Math.PI;
+      }
 
-function setVehicle(state, frac){
-  const {map, marker, path} = state;
-  const n = path.length - 1;
-  frac = Math.max(0, Math.min(1, frac));
-  marker.setLatLng(path[Math.round(frac*n)]);
-  const i = Math.min(n-1, Math.floor(frac*n));
-  const el = marker.getElement();
-  if(!el) return;
-  const svg = el.querySelector('.veh-svg');
-  if(!svg) return;
-  const a = bearingPx(map, path[i], path[i+1]);
-  if(state.mode === 'ferry'){
-    const rad = a * Math.PI / 180;
-    const faceLeft = Math.cos(rad) < 0;
-    const tilt = Math.max(-16, Math.min(16, Math.sin(rad) * 16)) * (faceLeft ? -1 : 1);
-    svg.style.transform = `scaleX(${faceLeft ? -1 : 1}) rotate(${tilt}deg)`;
-  } else {
-    svg.style.transform = `rotate(${a}deg)`;
-  }
-}
+      function setVehicle(state, frac) {
+        const { map, marker, path } = state;
+        const n = path.length - 1;
+        frac = Math.max(0, Math.min(1, frac));
+        marker.setLatLng(path[Math.round(frac * n)]);
+        const i = Math.min(n - 1, Math.floor(frac * n));
+        const el = marker.getElement();
+        if (!el) return;
+        const svg = el.querySelector(".veh-svg");
+        if (!svg) return;
+        const a = bearingPx(map, path[i], path[i + 1]);
+        if (state.mode === "ferry") {
+          const rad = (a * Math.PI) / 180;
+          const faceLeft = Math.cos(rad) < 0;
+          const tilt = Math.max(-16, Math.min(16, Math.sin(rad) * 16)) * (faceLeft ? -1 : 1);
+          svg.style.transform = `scaleX(${faceLeft ? -1 : 1}) rotate(${tilt}deg)`;
+        } else {
+          svg.style.transform = `rotate(${a}deg)`;
+        }
+      }
 
-function playRoute(id){
-  try{
-    const state = activeMaps[id];
-    if(!state || state.running) return;
-    state.running = true;
-    const dur = state.dur || 2600;
-    const holdStart = 300, holdEnd = 1000;
-    const cycle = holdStart + dur + holdEnd;
-    let cycleStart = performance.now();
-    function frame(now){
-      try{
-        if(!state.visible){ state.running = false; setVehicle(state, 0); return; }
-        const p = (now - cycleStart) % cycle;
-        let frac;
-        if(p < holdStart) frac = 0;
-        else if(p < holdStart + dur) frac = (p - holdStart) / dur;
-        else frac = 1;
-        setVehicle(state, frac);
-        state.raf = requestAnimationFrame(frame);
-      } catch(err){ console.error('route animation failed for', id, err); }
-    }
-    state.raf = requestAnimationFrame(frame);
-  } catch(err){ console.error('playRoute failed for', id, err); }
-}
+      function playRoute(id) {
+        try {
+          const state = activeMaps[id];
+          if (!state || state.running) return;
+          state.running = true;
+          const dur = state.dur || 2600;
+          const holdStart = 300,
+            holdEnd = 1000;
+          const cycle = holdStart + dur + holdEnd;
+          let cycleStart = performance.now();
+          function frame(now) {
+            try {
+              if (!state.visible) {
+                state.running = false;
+                setVehicle(state, 0);
+                return;
+              }
+              const p = (now - cycleStart) % cycle;
+              let frac;
+              if (p < holdStart) frac = 0;
+              else if (p < holdStart + dur) frac = (p - holdStart) / dur;
+              else frac = 1;
+              setVehicle(state, frac);
+              state.raf = requestAnimationFrame(frame);
+            } catch (err) {
+              console.error("route animation failed for", id, err);
+            }
+          }
+          state.raf = requestAnimationFrame(frame);
+        } catch (err) {
+          console.error("playRoute failed for", id, err);
+        }
+      }
 
-function mapSVG(id){
-  return `<div class="map-wrap"><div class="realmap" id="map-${id}"></div></div>`;
-}
+      function mapSVG(id) {
+        return `<div class="map-wrap"><div class="realmap" id="map-${id}"></div></div>`;
+      }
 
-const TIMELINE = {{TIMELINE_JSON}};
+      const TIMELINE = {{TIMELINE_JSON}};
 
-/* =========================================================
+      /* =========================================================
    RENDER
    ========================================================= */
 
-function legHTML(stops){
-  return `<span class="leg">` + (stops||[]).map((s,i)=>
-    (i ? `<span class="leg-arrow" aria-hidden="true">←</span>` : "") + `<span>${s}</span>`
-  ).join("") + `</span>`;
-}
+      function legHTML(stops) {
+        return (
+          `<span class="leg">` +
+          (stops || [])
+            .map(
+              (s, i) =>
+                (i ? `<span class="leg-arrow" aria-hidden="true">←</span>` : "") +
+                `<span>${s}</span>`,
+            )
+            .join("") +
+          `</span>`
+        );
+      }
 
-function transitHTML(item, idx){
-  const id = "t"+idx;
-  const kicker = `${item.date} · ${item.kicker}` + (item.flightNo ? ` · ${item.flightNo}` : "");
-  const routeLine = item.terminals
-    ? `${legHTML(item.terminals)}<span class="route-sep">·</span>${item.route}`
-    : item.route;
-  return `
+      function transitHTML(item, idx) {
+        const id = "t" + idx;
+        const kicker =
+          `${item.date} · ${item.kicker}` + (item.flightNo ? ` · ${item.flightNo}` : "");
+        const routeLine = item.terminals
+          ? `${legHTML(item.terminals)}<span class="route-sep">·</span>${item.route}`
+          : item.route;
+        return `
   <section class="transit" data-reveal data-map-id="${id}" data-from="${item.from}" data-to="${item.to}" data-mode="${item.mode}"${item.viaStop ? ` data-via="${item.viaStop}"` : ""}${item.frame ? ` data-frame='${JSON.stringify(item.frame)}'` : ""}>
     <div class="wrap">
       <div class="kicker mono">${kicker}</div>
-      <h2>${legHTML(item.stops||[])}</h2>
+      <h2>${legHTML(item.stops || [])}</h2>
       <div class="route">${routeLine}</div>
       ${mapSVG(id)}
       ${item.israel ? `<div class="note">✈ טיסת המשך לנתב״ג, ישראל (מחוץ למסגרת המפה)</div>` : ""}
       ${item.note ? `<div class="note">${item.note}</div>` : ""}
     </div>
   </section>`;
-}
+      }
 
-function dramaHTML(item){
-  const id = "drama0";
-  return `
+      function dramaHTML(item) {
+        const id = "drama0";
+        return `
   <section id="drama" data-reveal data-map-id="${id}" data-from="${item.from}" data-to="${item.to}" data-mode="plane" data-roundtrip="true" data-fog="${item.fog}">
     <div class="wrap">
       <span class="eyebrow">${item.eyebrow}</span>
-      <h2>${legHTML(item.legs||[])}</h2>
+      <h2>${legHTML(item.legs || [])}</h2>
       ${mapSVG(id)}
-      ${(item.paras||[]).map(p=>`<p>${p}</p>`).join(`
+      ${(item.paras || []).map((p) => `<p>${p}</p>`).join(`
       `)}
       <div class="badge">${item.badge}</div>
     </div>
   </section>`;
-}
+      }
 
-function galleryHTML(list, emptyCount, emptyIcon, emptyText, alt){
-  if(list && list.length){
-    return list.map(src => `<div class="ph img-set"><img src="${src}" alt="${alt}" loading="lazy"></div>`).join("");
-  }
-  return Array.from({length:emptyCount}).map(()=>`<div class="ph"><div class="icon">${emptyIcon}</div><div>${emptyText}</div></div>`).join("");
-}
+      function galleryHTML(list, emptyCount, emptyIcon, emptyText, alt) {
+        if (list && list.length) {
+          return list
+            .map(
+              (src) =>
+                `<div class="ph img-set"><img src="${src}" alt="${alt}" loading="lazy"></div>`,
+            )
+            .join("");
+        }
+        return Array.from({ length: emptyCount })
+          .map(
+            () =>
+              `<div class="ph"><div class="icon">${emptyIcon}</div><div>${emptyText}</div></div>`,
+          )
+          .join("");
+      }
 
-// the itinerary-row head, adopted from the reference: a big running day number
-// + dashed rule, ahead of the place name — shared by day/stay/layover sections
-function stayHead(numLabel, dates, isl, heading){
-  return `
+      // the itinerary-row head, adopted from the reference: a big running day number
+      // + dashed rule, ahead of the place name — shared by day/stay/layover sections
+      function stayHead(numLabel, dates, isl, heading) {
+        return `
       <div class="stay-head">
         <div class="daynum mono">${numLabel}</div>
         <div class="headtext">
@@ -572,27 +662,39 @@ function stayHead(numLabel, dates, isl, heading){
           <h2>${heading}</h2>
         </div>
       </div>`;
-}
+      }
 
-function dayHTML(item, dayNum, dayTotal){
-  const media = PHOTOS[item.key] || {};
-  const tripGallery = galleryHTML(item.tripPhotos, 3, "🖼", "תמונה שלכם תבוא כאן", item.title);
-  const place = item.city ? `${item.city}, ${item.island||""}` : (item.island||item.city||"");
-  const isCheckIn = !!item.isCheckIn;
-  const eyebrow = isCheckIn ? (item.title||"") : place;
-  const heading = isCheckIn ? (place||"") : (item.title||"");
-  // a running day-of-trip number (1..total calendar days), not the day's index
-  // within its own stay — so numbering never restarts partway through the trip
-  const numLabel = String(dayNum).padStart(2,'0');
+      function dayHTML(item, dayNum, dayTotal) {
+        const media = PHOTOS[item.key] || {};
+        const tripGallery = galleryHTML(item.tripPhotos, 3, "🖼", "תמונה שלכם תבוא כאן", item.title);
+        const place = item.city
+          ? `${item.city}, ${item.island || ""}`
+          : item.island || item.city || "";
+        const isCheckIn = !!item.isCheckIn;
+        const eyebrow = isCheckIn ? item.title || "" : place;
+        const heading = isCheckIn ? place || "" : item.title || "";
+        // a running day-of-trip number (1..total calendar days), not the day's index
+        // within its own stay — so numbering never restarts partway through the trip
+        const numLabel = String(dayNum).padStart(2, "0");
 
-  let lodgingHTML = "";
-  if(isCheckIn){
-    const lodgingGallery = galleryHTML(media.lodging, 2, "🏠", "תמונת הדירה תבוא כאן", item.title);
-    const hostHTML = item.airbnb
-      ? `<a href="${item.airbnb}" target="_blank" rel="noopener noreferrer" class="host-link">${item.host} ↗</a>`
-      : `<b>${item.host||""}</b>`;
-    const viaLabel = item.via ? ("לינה דרך " + item.via) : (item.airbnb ? "לינה דרך Airbnb" : "הזמנה ישירה");
-    lodgingHTML = `
+        let lodgingHTML = "";
+        if (isCheckIn) {
+          const lodgingGallery = galleryHTML(
+            media.lodging,
+            2,
+            "🏠",
+            "תמונת הדירה תבוא כאן",
+            item.title,
+          );
+          const hostHTML = item.airbnb
+            ? `<a href="${item.airbnb}" target="_blank" rel="noopener noreferrer" class="host-link">${item.host} ↗</a>`
+            : `<b>${item.host || ""}</b>`;
+          const viaLabel = item.via
+            ? "לינה דרך " + item.via
+            : item.airbnb
+              ? "לינה דרך Airbnb"
+              : "הזמנה ישירה";
+          lodgingHTML = `
       <div class="lodging-card">
         <div class="ic">🏠</div>
         <div class="info">
@@ -603,36 +705,48 @@ function dayHTML(item, dayNum, dayTotal){
       </div>
       <div class="gallery-label">תמונות מהדירה</div>
       <div class="gallery">${lodgingGallery}</div>`;
-  }
+        }
 
-  return `
-  <section class="stay" data-reveal id="day-${item.key}-${item.dayIndex||1}">
+        return `
+  <section class="stay" data-reveal id="day-${item.key}-${item.dayIndex || 1}">
     <div class="wrap">
       ${stayHead(numLabel, item.dates, eyebrow, heading)}
-      <p class="lede">${item.lede||""}</p>
+      <p class="lede">${item.lede || ""}</p>
       ${item.about ? `<div class="about"><span class="about-k">קצת רקע</span>${item.about}</div>` : ""}
       ${lodgingHTML}
       <div class="gallery-label">תמונות מהיום</div>
       <div class="gallery">${tripGallery}</div>
-      <div class="tags">${(item.tags||[]).map(t=>`<div class="tag">${t}</div>`).join("")}</div>
+      <div class="tags">${(item.tags || []).map((t) => `<div class="tag">${t}</div>`).join("")}</div>
     </div>
   </section>`;
-}
+      }
 
-function stayHTML(item){
-  const media = PHOTOS[item.key] || {};
-  const lodgingGallery = galleryHTML(media.lodging, 4, "🏠", "תמונת הדירה תבוא כאן", item.title);
-  const tripGallery = galleryHTML(media.trip, 6, "🖼", "תמונה שלכם תבוא כאן", item.title);
-  const hostHTML = item.airbnb
-    ? `<a href="${item.airbnb}" target="_blank" rel="noopener noreferrer" class="host-link">${item.host} ↗</a>`
-    : `<b>${item.host}</b>`;
-  const viaLabel = item.via ? ("לינה דרך " + item.via) : (item.airbnb ? "לינה דרך Airbnb" : "הזמנה ישירה");
-  const place = item.city ? `${item.city}, ${item.island||""}` : (item.island||item.city||"");
-  return `
+      function stayHTML(item) {
+        const media = PHOTOS[item.key] || {};
+        const lodgingGallery = galleryHTML(
+          media.lodging,
+          4,
+          "🏠",
+          "תמונת הדירה תבוא כאן",
+          item.title,
+        );
+        const tripGallery = galleryHTML(media.trip, 6, "🖼", "תמונה שלכם תבוא כאן", item.title);
+        const hostHTML = item.airbnb
+          ? `<a href="${item.airbnb}" target="_blank" rel="noopener noreferrer" class="host-link">${item.host} ↗</a>`
+          : `<b>${item.host}</b>`;
+        const viaLabel = item.via
+          ? "לינה דרך " + item.via
+          : item.airbnb
+            ? "לינה דרך Airbnb"
+            : "הזמנה ישירה";
+        const place = item.city
+          ? `${item.city}, ${item.island || ""}`
+          : item.island || item.city || "";
+        return `
   <section class="stay" data-reveal id="stay-${item.key}">
     <div class="wrap">
-      ${stayHead("•", item.dates, item.title||"", place||"")}
-      <p class="lede">${item.lede||""}</p>
+      ${stayHead("•", item.dates, item.title || "", place || "")}
+      <p class="lede">${item.lede || ""}</p>
       ${item.about ? `<div class="about"><span class="about-k">קצת רקע</span>${item.about}</div>` : ""}
       <div class="lodging-card">
         <div class="ic">🏠</div>
@@ -646,114 +760,131 @@ function stayHTML(item){
       <div class="gallery">${lodgingGallery}</div>
       <div class="gallery-label">תמונות מהטיול</div>
       <div class="gallery">${tripGallery}</div>
-      <div class="tags">${(item.tags||[]).map(t=>`<div class="tag">${t}</div>`).join("")}</div>
+      <div class="tags">${(item.tags || []).map((t) => `<div class="tag">${t}</div>`).join("")}</div>
     </div>
   </section>`;
-}
+      }
 
-function layoverHTML(item, dayNum, dayTotal){
-  const media = PHOTOS[item.key] || {};
-  const gallery = galleryHTML(media.trip, 6, "🖼", "תמונה מהעיר תבוא כאן", item.title);
-  const numLabel = String(dayNum).padStart(2,'0');
-  return `
+      function layoverHTML(item, dayNum, dayTotal) {
+        const media = PHOTOS[item.key] || {};
+        const gallery = galleryHTML(media.trip, 6, "🖼", "תמונה מהעיר תבוא כאן", item.title);
+        const numLabel = String(dayNum).padStart(2, "0");
+        return `
   <section class="stay layover" data-reveal id="stay-${item.key}">
     <div class="wrap">
-      ${stayHead(numLabel, item.dates, (item.title||"") + " · עצירת ביניים", item.city + ", Portugal")}
-      <p class="lede">${item.lede||""}</p>
+      ${stayHead(numLabel, item.dates, (item.title || "") + " · עצירת ביניים", item.city + ", Portugal")}
+      <p class="lede">${item.lede || ""}</p>
       ${item.about ? `<div class="about"><span class="about-k">קצת רקע</span>${item.about}</div>` : ""}
       <div class="gallery-label">תמונות מהעיר</div>
       <div class="gallery">${gallery}</div>
-      <div class="tags">${(item.tags||[]).map(t=>`<div class="tag">${t}</div>`).join("")}</div>
+      <div class="tags">${(item.tags || []).map((t) => `<div class="tag">${t}</div>`).join("")}</div>
     </div>
   </section>`;
-}
+      }
 
-// one continuous day-of-trip count across "day" and "layover" items (each is one
-// calendar day) — a legacy un-expanded "stay" spans multiple nights as a single
-// section, so it isn't part of this count and keeps its own "•" marker instead
-const DAY_TOTAL = TIMELINE.filter(it => it.type === "day" || it.type === "layover").length;
-let dayRunning = 0;
+      // one continuous day-of-trip count across "day" and "layover" items (each is one
+      // calendar day) — a legacy un-expanded "stay" spans multiple nights as a single
+      // section, so it isn't part of this count and keeps its own "•" marker instead
+      const DAY_TOTAL = TIMELINE.filter((it) => it.type === "day" || it.type === "layover").length;
+      let dayRunning = 0;
 
-const app = document.getElementById("app");
-app.innerHTML = TIMELINE.map((item, i)=>{
-  if(item.type==="transit") return transitHTML(item, i);
-  if(item.type==="drama") return dramaHTML(item);
-  if(item.type==="day") return dayHTML(item, ++dayRunning, DAY_TOTAL);
-  if(item.type==="stay") return stayHTML(item);
-  if(item.type==="layover") return layoverHTML(item, ++dayRunning, DAY_TOTAL);
-  return "";
-}).join("");
+      const app = document.getElementById("app");
+      app.innerHTML = TIMELINE.map((item, i) => {
+        if (item.type === "transit") return transitHTML(item, i);
+        if (item.type === "drama") return dramaHTML(item);
+        if (item.type === "day") return dayHTML(item, ++dayRunning, DAY_TOTAL);
+        if (item.type === "stay") return stayHTML(item);
+        if (item.type === "layover") return layoverHTML(item, ++dayRunning, DAY_TOTAL);
+        return "";
+      }).join("");
 
-// one-time, static hero photo (no animation) — the 2 best SCENIC shots the
-// pipeline picked from the whole trip (select_photos.py's hero pass), not
-// just whatever day-1 happens to have. Falls back to the first day/stay with
-// photos for older specs built before that pipeline step existed.
-(function setHeroPhoto(){
-  const showCard = (photoSrc) => {
-    const card = document.getElementById('hero-card');
-    if(card && card.querySelector('.hero-card-title').textContent.trim()){
-      card.querySelector('.hero-card-photo img').src = photoSrc;
-      card.hidden = false;
-    }
-  };
+      // one-time, static hero photo (no animation) — the 2 best SCENIC shots the
+      // pipeline picked from the whole trip (select_photos.py's hero pass), not
+      // just whatever day-1 happens to have. Falls back to the first day/stay with
+      // photos for older specs built before that pipeline step existed.
+      (function setHeroPhoto() {
+        const showCard = (photoSrc) => {
+          const card = document.getElementById("hero-card");
+          if (card && card.querySelector(".hero-card-title").textContent.trim()) {
+            card.querySelector(".hero-card-photo img").src = photoSrc;
+            card.hidden = false;
+          }
+        };
 
-  if(HERO_PHOTOS && HERO_PHOTOS.length){
-    const hero = document.getElementById('hero');
-    hero.style.backgroundImage =
-      `linear-gradient(rgba(0,0,0,.15), rgba(0,0,0,.45)), url('${HERO_PHOTOS[0]}')`;
-    showCard(HERO_PHOTOS.length > 1 ? HERO_PHOTOS[1] : HERO_PHOTOS[0]);
-    return;
-  }
+        if (HERO_PHOTOS && HERO_PHOTOS.length) {
+          const hero = document.getElementById("hero");
+          hero.style.backgroundImage = `linear-gradient(rgba(0,0,0,.15), rgba(0,0,0,.45)), url('${HERO_PHOTOS[0]}')`;
+          showCard(HERO_PHOTOS.length > 1 ? HERO_PHOTOS[1] : HERO_PHOTOS[0]);
+          return;
+        }
 
-  // fallback: older spec, no dedicated hero pick yet
-  for(const item of TIMELINE){
-    const pics = item.tripPhotos || (PHOTOS[item.key] && PHOTOS[item.key].trip) || [];
-    if(pics && pics.length){
-      const hero = document.getElementById('hero');
-      hero.style.backgroundImage =
-        `linear-gradient(rgba(0,0,0,.15), rgba(0,0,0,.45)), url('${pics[0]}')`;
-      showCard(pics.length > 1 ? pics[1] : pics[0]);
-      return;
-    }
-  }
-})();
+        // fallback: older spec, no dedicated hero pick yet
+        for (const item of TIMELINE) {
+          const pics = item.tripPhotos || (PHOTOS[item.key] && PHOTOS[item.key].trip) || [];
+          if (pics && pics.length) {
+            const hero = document.getElementById("hero");
+            hero.style.backgroundImage = `linear-gradient(rgba(0,0,0,.15), rgba(0,0,0,.45)), url('${pics[0]}')`;
+            showCard(pics.length > 1 ? pics[1] : pics[0]);
+            return;
+          }
+        }
+      })();
 
-/* =========================================================
+      /* =========================================================
    SCROLL-TRIGGERED MAP CREATION + ANIMATION + PROGRESS RAIL
    ========================================================= */
-const io = new IntersectionObserver((entries)=>{
-  entries.forEach(e=>{
-    try{
-      const mapId = e.target.dataset.mapId;
-      const visible = e.isIntersecting && e.intersectionRatio >= 0.2;
-      if(e.isIntersecting) e.target.classList.add('in');
-      if(!mapId) return;
+      const io = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((e) => {
+            try {
+              const mapId = e.target.dataset.mapId;
+              const visible = e.isIntersecting && e.intersectionRatio >= 0.2;
+              if (e.isIntersecting) e.target.classList.add("in");
+              if (!mapId) return;
 
-      if(!visible){
-        if(activeMaps[mapId]) activeMaps[mapId].visible = false;
-        return;
-      }
-      if(typeof L === "undefined"){
-        setTimeout(()=>{ io.unobserve(e.target); io.observe(e.target); }, 300);
-        return;
-      }
-      if(!activeMaps[mapId]){
-        buildMap(mapId, e.target.dataset.from, e.target.dataset.to, e.target.dataset.mode, e.target.dataset);
-        setTimeout(()=>{ if(activeMaps[mapId]){ activeMaps[mapId].visible = true; playRoute(mapId); } }, 350);
-      } else {
-        activeMaps[mapId].visible = true;
-        playRoute(mapId);
-      }
-    } catch(err){ console.error('observer entry failed', err); }
-  });
-}, {threshold:[0, 0.2, 0.35]});
-document.querySelectorAll('[data-reveal]').forEach(el=>io.observe(el));
+              if (!visible) {
+                if (activeMaps[mapId]) activeMaps[mapId].visible = false;
+                return;
+              }
+              if (typeof L === "undefined") {
+                setTimeout(() => {
+                  io.unobserve(e.target);
+                  io.observe(e.target);
+                }, 300);
+                return;
+              }
+              if (!activeMaps[mapId]) {
+                buildMap(
+                  mapId,
+                  e.target.dataset.from,
+                  e.target.dataset.to,
+                  e.target.dataset.mode,
+                  e.target.dataset,
+                );
+                setTimeout(() => {
+                  if (activeMaps[mapId]) {
+                    activeMaps[mapId].visible = true;
+                    playRoute(mapId);
+                  }
+                }, 350);
+              } else {
+                activeMaps[mapId].visible = true;
+                playRoute(mapId);
+              }
+            } catch (err) {
+              console.error("observer entry failed", err);
+            }
+          });
+        },
+        { threshold: [0, 0.2, 0.35] },
+      );
+      document.querySelectorAll("[data-reveal]").forEach((el) => io.observe(el));
 
-window.addEventListener('scroll', ()=>{
-  const h = document.documentElement;
-  const pct = (h.scrollTop) / (h.scrollHeight - h.clientHeight) * 100;
-  document.getElementById('rail-fill').style.height = pct+'%';
-});
-</script>
-</body>
+      window.addEventListener("scroll", () => {
+        const h = document.documentElement;
+        const pct = (h.scrollTop / (h.scrollHeight - h.clientHeight)) * 100;
+        document.getElementById("rail-fill").style.height = pct + "%";
+      });
+    </script>
+  </body>
 </html>

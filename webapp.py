@@ -13,6 +13,7 @@ optionally "Add photos" (Google Photos Picker, reuses credentials.json / token.j
 
 State lives in trips.db (sqlite) and webapp_data/<trip_id>/.
 """
+
 from __future__ import annotations
 
 try:
@@ -67,7 +68,9 @@ app.mount("/static", StaticFiles(directory=str(ROOT / "static")), name="static")
 _secret_path = ROOT / "session_secret.txt"
 if not _secret_path.exists():
     _secret_path.write_text(secrets.token_hex(32), encoding="utf-8")
-SESSION_SECRET = os.environ.get("SESSION_SECRET") or _secret_path.read_text(encoding="utf-8").strip()
+SESSION_SECRET = (
+    os.environ.get("SESSION_SECRET") or _secret_path.read_text(encoding="utf-8").strip()
+)
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET, same_site="lax")
 
 # a distinct salt (not the raw SESSION_SECRET) so a leaked reset link's token
@@ -92,6 +95,7 @@ def render(name: str, **marks) -> HTMLResponse:
 # as a same-named wrapper so every existing `with db() as c: c.execute(...)`
 # call site below needs no changes.
 
+
 def db():
     return _db.db()
 
@@ -109,6 +113,7 @@ def get_trip(tid: str):
 
 
 # ----------------------------------------------------------------------- auth
+
 
 def hash_password(pw: str) -> str:
     return bcrypt.hashpw(pw.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
@@ -129,8 +134,8 @@ def get_user_by_email(email: str):
 # deliberately stricter than "anything but @ and whitespace" - that let
 # through things like "<script>...</script>@x.com" as a "valid" email
 EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$")
-MAX_PASSWORD_LEN = 72   # bcrypt's own hard limit in bytes; hashing a longer one raises
-RESET_TOKEN_MAX_AGE = 3600   # 1 hour
+MAX_PASSWORD_LEN = 72  # bcrypt's own hard limit in bytes; hashing a longer one raises
+RESET_TOKEN_MAX_AGE = 3600  # 1 hour
 
 
 def _make_reset_token(user) -> str:
@@ -200,6 +205,7 @@ def logline(tid: str, msg: str):
 
 # -------------------------------------------------------------------- pipeline
 
+
 def _docs_text(tid: str) -> tuple[str, list[pathlib.Path]]:
     files = sorted((trip_dir(tid) / "docs").glob("*")) if (trip_dir(tid) / "docs").is_dir() else []
     text = "\n\n".join(parse_docs.read_doc(f) for f in files if f.is_file())
@@ -221,15 +227,18 @@ def run_build(tid: str):
         update(tid, stage="מנתח את המסלול")
         rx = parse_docs.parse_docx_regex(source)
         ai = parse_docs.parse_ai(source, MODEL, log=lambda m: logline(tid, m)) if key else None
-        logline(tid, f"regex: {len(rx['flights'])}f/{len(rx['ferries'])}fe/{len(rx['stays'])}s"
-                     + (f"; ai: {len(ai.get('timeline', []))} items" if ai else "; no ai"))
+        logline(
+            tid,
+            f"regex: {len(rx['flights'])}f/{len(rx['ferries'])}fe/{len(rx['stays'])}s"
+            + (f"; ai: {len(ai.get('timeline', []))} items" if ai else "; no ai"),
+        )
 
         spec = parse_docs.assemble(ai, rx)
         spec.setdefault("meta", {}).setdefault("tz_offset_hours", 0)
         for it in spec["timeline"]:
             if it.get("type") in ("stay", "layover") and it.get("key"):
                 spec.setdefault("photos", {}).setdefault(it["key"], {"lodging": [], "trip": []})
-        spec = parse_docs.expand_days(spec)          # one section per calendar day
+        spec = parse_docs.expand_days(spec)  # one section per calendar day
         if not spec.get("timeline"):
             raise RuntimeError("יצירת הדף נכשלה 😔 נסה שוב.")
 
@@ -242,11 +251,14 @@ def run_build(tid: str):
                 pass
         if not spec.get("theme"):
             spec["theme"] = palette.generate_palette(tid)
-            logline(tid, f"color theme: accent {spec['theme']['turquoise']} / {spec['theme']['sea']}")
+            logline(
+                tid, f"color theme: accent {spec['theme']['turquoise']} / {spec['theme']['sea']}"
+            )
 
         update(tid, stage="שולף מיקומים ומפות")
-        unresolved = parse_docs.fill_coords(spec, hint, MODEL, ROOT / "geocode_cache.json",
-                                            log=lambda m: logline(tid, m))
+        unresolved = parse_docs.fill_coords(
+            spec, hint, MODEL, ROOT / "geocode_cache.json", log=lambda m: logline(tid, m)
+        )
         if unresolved:
             spec.setdefault("_warnings", []).append("no coordinates for: " + ", ".join(unresolved))
             logline(tid, "! unresolved places: " + ", ".join(unresolved))
@@ -254,8 +266,9 @@ def run_build(tid: str):
         if key:
             update(tid, stage="כותב את סיפור המסע")
             try:
-                gen_copy.generate_copy(spec, desc or "", text, model=MODEL,
-                                       log=lambda m: logline(tid, m))
+                gen_copy.generate_copy(
+                    spec, desc or "", text, model=MODEL, log=lambda m: logline(tid, m)
+                )
             except Exception as e:
                 logline(tid, f"copy step skipped: {e}")
         else:
@@ -271,7 +284,8 @@ def run_build(tid: str):
 
         update(tid, stage="בונה את דף המסע")
         (trip_dir(tid) / "spec.json").write_bytes(
-            (json.dumps(spec, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
+            (json.dumps(spec, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+        )
         html = build_trip.build(spec, TEMPLATE)
         (trip_dir(tid) / "page.html").write_bytes(html.replace("\r\n", "\n").encode("utf-8"))
 
@@ -288,13 +302,25 @@ def run_build(tid: str):
         if row2 and row2["picker_sid"]:
             update(tid, stage="ממתין לבחירת התמונות")
             try:
-                http = fetch_photos.authorise_for_user(row2["photo_owner_key"], config.OAUTH_WEB_CLIENT_PATH)
+                http = fetch_photos.authorise_for_user(
+                    row2["photo_owner_key"], config.OAUTH_WEB_CLIENT_PATH
+                )
                 if _wait_for_pick(row2["picker_sid"], http, 90):
                     _download_and_select(tid, http, row2["picker_sid"])
-                    update(tid, status="ready", stage="הושלם", error=None, picker_uri=None, picker_sid=None)
+                    update(
+                        tid,
+                        status="ready",
+                        stage="הושלם",
+                        error=None,
+                        picker_uri=None,
+                        picker_sid=None,
+                    )
                 else:
-                    logline(tid, "still waiting on your Google Photos pick - the page is ready; "
-                                 "use \"add photos\" on it once you're done picking")
+                    logline(
+                        tid,
+                        "still waiting on your Google Photos pick - the page is ready; "
+                        'use "add photos" on it once you\'re done picking',
+                    )
                     update(tid, status="ready", stage="הושלם", error=warn)
             except Exception as e:
                 logline(tid, f"photo step skipped: {e}")
@@ -324,8 +350,14 @@ def _select_from_local_photos(tid: str, spec: dict) -> None:
     key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
     gdir = trip_dir(tid) / "gphotos"
     photos = select_photos.load_photos("picker", manifest=gdir / "manifest.json", media_dir=gdir)
-    select_photos.select(photos, spec, trip_dir(tid) / "images" / "trips",
-                         use_ai=bool(key), model=MODEL, log=lambda m: logline(tid, m))
+    select_photos.select(
+        photos,
+        spec,
+        trip_dir(tid) / "images" / "trips",
+        use_ai=bool(key),
+        model=MODEL,
+        log=lambda m: logline(tid, m),
+    )
 
 
 def _download_and_select(tid: str, http, sid: str):
@@ -339,11 +371,14 @@ def _download_and_select(tid: str, http, sid: str):
     _select_from_local_photos(tid, spec)
 
     (trip_dir(tid) / "spec.json").write_bytes(
-        (json.dumps(spec, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
+        (json.dumps(spec, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+    )
     html = build_trip.build(spec, TEMPLATE)
     (trip_dir(tid) / "page.html").write_bytes(html.replace("\r\n", "\n").encode("utf-8"))
     n = sum(len(v.get("trip", [])) for v in spec.get("photos", {}).values())
-    n += sum(len(it.get("tripPhotos", [])) for it in spec.get("timeline", []) if it.get("type") == "day")
+    n += sum(
+        len(it.get("tripPhotos", [])) for it in spec.get("timeline", []) if it.get("type") == "day"
+    )
     logline(tid, f"page rebuilt with {n} photo(s)")
 
 
@@ -397,20 +432,28 @@ def index(request: Request):
     user = current_user(request)
     if user:
         with db() as c:
-            rows = c.execute("SELECT id, created, status, description FROM trips "
-                              "WHERE user_id=? ORDER BY created DESC", (user["id"],)).fetchall()
+            rows = c.execute(
+                "SELECT id, created, status, description FROM trips "
+                "WHERE user_id=? ORDER BY created DESC",
+                (user["id"],),
+            ).fetchall()
         cards = "".join(
             f'<div class="trip-card">'
             f'<a class="t-link" href="/trips/{r["id"]}">'
             f'<div class="t"><div class="desc">{_html.escape(trip_title(r["id"], r))}</div>'
             f'<div class="date mono">{r["created"]}</div></div>'
             f'<span class="pill {r["status"]}">{STATUS_LABELS.get(r["status"], r["status"])}</span>'
-            f'</a>'
+            f"</a>"
             f'<button type="button" class="del-btn" data-tid="{r["id"]}" '
             f'title="מחיקת הטיול" aria-label="מחיקת הטיול">🗑</button>'
-            f'</div>' for r in rows)
-        trips_html = (f'<div class="trips" id="trips"><h2>הטיולים שלך</h2>'
-                       + (cards or '<p class="hint">דפי הטיולים שלכם יופיעו כאן אחרי שתצרו אותם.</p>') + '</div>')
+            f"</div>"
+            for r in rows
+        )
+        trips_html = (
+            '<div class="trips" id="trips"><h2>הטיולים שלך</h2>'
+            + (cards or '<p class="hint">דפי הטיולים שלכם יופיעו כאן אחרי שתצרו אותם.</p>')
+            + "</div>"
+        )
         initial = user["email"].strip()[:1].upper() if user["email"].strip() else "?"
         account_html = (
             f'<div class="account-corner" title="{_html.escape(user["email"])}">'
@@ -419,14 +462,16 @@ def index(request: Request):
             f'<div class="account-menu" id="accountMenu" hidden>'
             f'<a href="#trips" class="menu-item" id="myTripsLink">הטיולים שלי</a>'
             f'<button type="button" class="menu-item logout" id="logoutBtn">התנתקות</button>'
-            f'</div></div>')
+            f"</div></div>"
+        )
     else:
         trips_html = ""
         account_html = (
             '<div class="auth-corner">'
             '<a href="/login" class="auth-pill">התחברות/הרשמה</a>'
             '<div class="guest-hint">בשימוש כאורח - הטיול לא יישמר לחשבון</div>'
-            '</div>')
+            "</div>"
+        )
     return render("index.html", TRIPS=trips_html, ACCOUNT=account_html)
 
 
@@ -453,8 +498,11 @@ def login_page(request: Request, signup: str = "", error: str = ""):
         PW_AUTOCOMPLETE=("new-password" if is_signup else "current-password"),
         PW_HINT=('<div class="hint-small">לפחות 6 תווים.</div>' if is_signup else ""),
         SUBMIT_LABEL=("יצירת חשבון" if is_signup else "התחברות"),
-        FORGOT_LINK=("" if is_signup else '<p class="guest"><a href="/forgot-password">שכחתי סיסמה</a></p>'),
-        ERROR=(f'<div class="err-banner show">{_html.escape(error)}</div>' if error else ""))
+        FORGOT_LINK=(
+            "" if is_signup else '<p class="guest"><a href="/forgot-password">שכחתי סיסמה</a></p>'
+        ),
+        ERROR=(f'<div class="err-banner show">{_html.escape(error)}</div>' if error else ""),
+    )
 
 
 def _finish_login(request: Request, user_id: int) -> None:
@@ -474,7 +522,8 @@ def login_submit(request: Request, email: str = Form(""), password: str = Form("
     u = get_user_by_email(email.strip().lower())
     if not u or not verify_password(password, u["password_hash"]):
         return RedirectResponse(
-            "/login?error=" + urllib.parse.quote("אימייל או סיסמה שגויים."), status_code=303)
+            "/login?error=" + urllib.parse.quote("אימייל או סיסמה שגויים."), status_code=303
+        )
     _finish_login(request, u["id"])
     return RedirectResponse("/", status_code=303)
 
@@ -486,16 +535,21 @@ def signup_submit(request: Request, email: str = Form(""), password: str = Form(
     email = email.strip().lower()
     if not EMAIL_RE.match(email) or len(password) < 6 or len(password) > MAX_PASSWORD_LEN:
         return RedirectResponse(
-            "/login?signup=1&error=" + urllib.parse.quote(
-                f"אימייל תקין וסיסמה בין 6 ל-{MAX_PASSWORD_LEN} תווים."),
-            status_code=303)
+            "/login?signup=1&error="
+            + urllib.parse.quote(f"אימייל תקין וסיסמה בין 6 ל-{MAX_PASSWORD_LEN} תווים."),
+            status_code=303,
+        )
     if get_user_by_email(email):
         return RedirectResponse(
-            "/login?signup=1&error=" + urllib.parse.quote("כבר יש חשבון עם האימייל הזה."), status_code=303)
+            "/login?signup=1&error=" + urllib.parse.quote("כבר יש חשבון עם האימייל הזה."),
+            status_code=303,
+        )
     try:
         with db() as c:
-            c.execute("INSERT INTO users(email, password_hash, created) VALUES(?,?,?)",
-                      (email, hash_password(password), time.strftime("%Y-%m-%d %H:%M")))
+            c.execute(
+                "INSERT INTO users(email, password_hash, created) VALUES(?,?,?)",
+                (email, hash_password(password), time.strftime("%Y-%m-%d %H:%M")),
+            )
     except Exception:
         # someone else's concurrent signup for the same email won the race
         # between our own check above and this insert - the DB's own unique
@@ -504,7 +558,9 @@ def signup_submit(request: Request, email: str = Form(""), password: str = Form(
         # friendly "already exists" message the pre-check gives everyone else.
         if get_user_by_email(email):
             return RedirectResponse(
-                "/login?signup=1&error=" + urllib.parse.quote("כבר יש חשבון עם האימייל הזה."), status_code=303)
+                "/login?signup=1&error=" + urllib.parse.quote("כבר יש חשבון עם האימייל הזה."),
+                status_code=303,
+            )
         raise
     _finish_login(request, get_user_by_email(email)["id"])
     return RedirectResponse("/", status_code=303)
@@ -515,15 +571,19 @@ def forgot_password_page(request: Request, sent: str = ""):
     if current_user(request):
         return RedirectResponse("/", status_code=303)
     if sent:
-        body = ('<p class="sub">אם קיים חשבון עם האימייל הזה, שלחנו אליו קישור לאיפוס '
-                'הסיסמה. בדקו את תיבת הדואר (וגם את תיקיית הספאם).</p>')
+        body = (
+            '<p class="sub">אם קיים חשבון עם האימייל הזה, שלחנו אליו קישור לאיפוס '
+            "הסיסמה. בדקו את תיבת הדואר (וגם את תיקיית הספאם).</p>"
+        )
     else:
-        body = ('<p class="sub">הזינו את האימייל שאיתו נרשמתם, ונשלח אליו קישור לאיפוס הסיסמה.</p>'
-                '<form method="post" action="/forgot-password">'
-                '<label>אימייל</label>'
-                '<input type="email" name="email" required autocomplete="email">'
-                '<button type="submit">שליחת קישור</button>'
-                '</form>')
+        body = (
+            '<p class="sub">הזינו את האימייל שאיתו נרשמתם, ונשלח אליו קישור לאיפוס הסיסמה.</p>'
+            '<form method="post" action="/forgot-password">'
+            "<label>אימייל</label>"
+            '<input type="email" name="email" required autocomplete="email">'
+            '<button type="submit">שליחת קישור</button>'
+            "</form>"
+        )
     return render("forgot_password.html", BODY=body)
 
 
@@ -534,12 +594,14 @@ def forgot_password_submit(email: str = Form("")):
     if user:
         token = _make_reset_token(user)
         link = f"{config.PUBLIC_BASE_URL}/reset-password?token={urllib.parse.quote(token)}"
-        html = (f'<div dir="rtl" style="font-family:Arial,sans-serif;line-height:1.6">'
-                f'<h2>איפוס סיסמה ל-MemoTrip</h2>'
-                f'<p>קיבלנו בקשה לאיפוס הסיסמה של החשבון שלך. הקישור בתוקף לשעה אחת:</p>'
-                f'<p><a href="{link}">לחצו כאן לאיפוס הסיסמה</a></p>'
-                f'<p style="color:#888;font-size:0.85em">אם לא ביקשתם זאת, אפשר להתעלם מהמייל '
-                f'הזה — הסיסמה שלכם לא תשתנה.</p></div>')
+        html = (
+            f'<div dir="rtl" style="font-family:Arial,sans-serif;line-height:1.6">'
+            f"<h2>איפוס סיסמה ל-MemoTrip</h2>"
+            f"<p>קיבלנו בקשה לאיפוס הסיסמה של החשבון שלך. הקישור בתוקף לשעה אחת:</p>"
+            f'<p><a href="{link}">לחצו כאן לאיפוס הסיסמה</a></p>'
+            f'<p style="color:#888;font-size:0.85em">אם לא ביקשתם זאת, אפשר להתעלם מהמייל '
+            f"הזה — הסיסמה שלכם לא תשתנה.</p></div>"
+        )
         try:
             mailer.send(email, "איפוס סיסמה ל-MemoTrip", html)
         except Exception:
@@ -559,18 +621,22 @@ def forgot_password_submit(email: str = Form("")):
 def reset_password_page(token: str = "", error: str = ""):
     user = _verify_reset_token(token)
     if not user:
-        body = ('<p class="sub">הקישור לא תקין, כבר נוצל, או שפג תוקפו.</p>'
-                '<p class="guest"><a href="/forgot-password">בקשת קישור חדש</a></p>')
+        body = (
+            '<p class="sub">הקישור לא תקין, כבר נוצל, או שפג תוקפו.</p>'
+            '<p class="guest"><a href="/forgot-password">בקשת קישור חדש</a></p>'
+        )
         return render("reset_password.html", BODY=body)
     error_html = f'<div class="err-banner show">{_html.escape(error)}</div>' if error else ""
-    body = (f'{error_html}'
-            f'<form method="post" action="/reset-password">'
-            f'<input type="hidden" name="token" value="{_html.escape(token)}">'
-            f'<label>סיסמה חדשה</label>'
-            f'<input type="password" name="password" required autocomplete="new-password">'
-            f'<div class="hint-small">בין 6 ל-{MAX_PASSWORD_LEN} תווים.</div>'
-            f'<button type="submit">עדכון סיסמה</button>'
-            f'</form>')
+    body = (
+        f"{error_html}"
+        f'<form method="post" action="/reset-password">'
+        f'<input type="hidden" name="token" value="{_html.escape(token)}">'
+        f"<label>סיסמה חדשה</label>"
+        f'<input type="password" name="password" required autocomplete="new-password">'
+        f'<div class="hint-small">בין 6 ל-{MAX_PASSWORD_LEN} תווים.</div>'
+        f'<button type="submit">עדכון סיסמה</button>'
+        f"</form>"
+    )
     return render("reset_password.html", BODY=body)
 
 
@@ -581,10 +647,14 @@ def reset_password_submit(request: Request, token: str = Form(""), password: str
         return RedirectResponse("/forgot-password", status_code=303)
     if len(password) < 6 or len(password) > MAX_PASSWORD_LEN:
         return RedirectResponse(
-            f"/reset-password?token={urllib.parse.quote(token)}&error=" +
-            urllib.parse.quote(f"סיסמה בין 6 ל-{MAX_PASSWORD_LEN} תווים."), status_code=303)
+            f"/reset-password?token={urllib.parse.quote(token)}&error="
+            + urllib.parse.quote(f"סיסמה בין 6 ל-{MAX_PASSWORD_LEN} תווים."),
+            status_code=303,
+        )
     with db() as c:
-        c.execute("UPDATE users SET password_hash=? WHERE id=?", (hash_password(password), user["id"]))
+        c.execute(
+            "UPDATE users SET password_hash=? WHERE id=?", (hash_password(password), user["id"])
+        )
     _finish_login(request, user["id"])
     return RedirectResponse("/", status_code=303)
 
@@ -606,12 +676,15 @@ def _photos_bridge_page(sid: str, picker_uri: str) -> HTMLResponse:
     picker as one continuous trip; the main tab never navigates at all."""
     payload = json.dumps({"type": "memotrip_photos_ready", "sid": sid})
     picker_uri_js = json.dumps(picker_uri)
-    html = (f'<!doctype html><meta charset="utf-8">'
-            f'<script>'
-            f'if (window.opener) {{ try {{ window.opener.postMessage({payload}, window.location.origin); }} '
-            f'catch (e) {{}} }}'
-            f'window.location.replace({picker_uri_js});'
-            f'</script>')
+    html = (
+        f'<!doctype html><meta charset="utf-8">'
+        f"<script>"
+        f"if (window.opener) {{ "
+        f"try {{ window.opener.postMessage({payload}, window.location.origin); }} "
+        f"catch (e) {{}} }}"
+        f"window.location.replace({picker_uri_js});"
+        f"</script>"
+    )
     return HTMLResponse(html)
 
 
@@ -636,9 +709,8 @@ def oauth_photos_start(request: Request, next: str = "/", tid: str = ""):
     code."""
     state = secrets.token_urlsafe(24)
     url, code_verifier = fetch_photos.build_auth_url(
-        config.OAUTH_WEB_CLIENT_PATH,
-        f"{config.PUBLIC_BASE_URL}/oauth/photos/callback",
-        state)
+        config.OAUTH_WEB_CLIENT_PATH, f"{config.PUBLIC_BASE_URL}/oauth/photos/callback", state
+    )
     request.session["photos_oauth_state"] = state
     request.session["photos_oauth_next"] = next
     request.session["photos_oauth_verifier"] = code_verifier
@@ -655,15 +727,21 @@ def oauth_photos_callback(request: Request, code: str = "", state: str = ""):
     tid = request.session.pop("photos_oauth_tid", "")
     owner_key = request.session.pop("photos_oauth_owner", None)
     if not owner_key or not state or not expected or state != expected or not verifier:
-        return HTMLResponse("Google Photos connection failed: invalid or expired request.", status_code=400)
+        return HTMLResponse(
+            "Google Photos connection failed: invalid or expired request.", status_code=400
+        )
     try:
         creds = fetch_photos.exchange_code(
             config.OAUTH_WEB_CLIENT_PATH,
             f"{config.PUBLIC_BASE_URL}/oauth/photos/callback",
-            code, verifier)
+            code,
+            verifier,
+        )
         fetch_photos.save_user_credentials(owner_key, creds)
     except Exception as e:
-        return HTMLResponse(f"Google Photos connection failed: {_html.escape(str(e))}", status_code=500)
+        return HTMLResponse(
+            f"Google Photos connection failed: {_html.escape(str(e))}", status_code=500
+        )
     # continue straight into a real picker session, in this same popup tab -
     # this is what makes the whole thing a single click for the user (see
     # _photos_bridge_page). Only fall back to the plain next_url redirect if
@@ -687,7 +765,9 @@ def photos_session(request: Request):
     each keyed by their own photo_owner_key() (see /oauth/photos/start); an
     unconnected owner gets a JSON error the front end redirects on."""
     try:
-        http, session = fetch_photos.open_session_for_user(photo_owner_key(request), config.OAUTH_WEB_CLIENT_PATH)
+        http, session = fetch_photos.open_session_for_user(
+            photo_owner_key(request), config.OAUTH_WEB_CLIENT_PATH
+        )
         return {"picker_uri": session["pickerUri"], "sid": session["id"]}
     except fetch_photos.PhotosNotConnected:
         # resume_photos=1 lets the landing page auto-retry this same action
@@ -696,38 +776,57 @@ def photos_session(request: Request):
         # no clue they need to click "connect" a second time.
         next_url = "/?" + urllib.parse.urlencode({"resume_photos": "1"})
         connect_url = "/oauth/photos/start?" + urllib.parse.urlencode({"next": next_url})
-        return JSONResponse({"error": "connect Google Photos first",
-                              "connect_url": connect_url}, status_code=401)
+        return JSONResponse(
+            {"error": "connect Google Photos first", "connect_url": connect_url}, status_code=401
+        )
     except Exception as e:
-        traceback.print_exc()      # otherwise a 500 here leaves zero trace in the logs
+        traceback.print_exc()  # otherwise a 500 here leaves zero trace in the logs
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
 @app.post("/trips")
-async def create(request: Request, description: str = Form(""), region_hint: str = Form(""),
-                 picker_sid: str = Form(""), docs: list[UploadFile] = None):
+async def create(
+    request: Request,
+    description: str = Form(""),
+    region_hint: str = Form(""),
+    picker_sid: str = Form(""),
+    docs: list[UploadFile] = None,
+):
     tid = uuid.uuid4().hex
     d = trip_dir(tid)
     (d / "docs").mkdir(parents=True, exist_ok=True)
     (d / "images").mkdir(exist_ok=True)
     saved = 0
-    for up in (docs or []):
+    for up in docs or []:
         if up and up.filename:
             (d / "docs" / pathlib.Path(up.filename).name).write_bytes(await up.read())
             saved += 1
     if not description.strip() and not saved:
-        return JSONResponse({"error": "add a description or at least one document"}, status_code=400)
-    user = current_user(request)                     # None for a guest - trip stays unowned
+        return JSONResponse(
+            {"error": "add a description or at least one document"}, status_code=400
+        )
+    user = current_user(request)  # None for a guest - trip stays unowned
     # photo_owner_key is set for guests too (a stable per-session id, not an
     # account) - see photo_owner_key() - so run_build/run_photos can look up
     # this trip's own Google Photos connection later, in a background job
     # that has no browser session/cookies to derive it from.
     with db() as c:
-        c.execute("INSERT INTO trips(id, created, description, region_hint, status, stage, log, "
-                  "picker_sid, user_id, photo_owner_key) VALUES(?,?,?,?,?,?,?,?,?,?)",
-                  (tid, time.strftime("%Y-%m-%d %H:%M"), description, region_hint,
-                   "queued", "queued", "", picker_sid or None, user["id"] if user else None,
-                   photo_owner_key(request)))
+        c.execute(
+            "INSERT INTO trips(id, created, description, region_hint, status, stage, log, "
+            "picker_sid, user_id, photo_owner_key) VALUES(?,?,?,?,?,?,?,?,?,?)",
+            (
+                tid,
+                time.strftime("%Y-%m-%d %H:%M"),
+                description,
+                region_hint,
+                "queued",
+                "queued",
+                "",
+                picker_sid or None,
+                user["id"] if user else None,
+                photo_owner_key(request),
+            ),
+        )
     tasks.enqueue("build", tid)
     return RedirectResponse(f"/trips/{tid}", status_code=303)
 
@@ -761,11 +860,14 @@ def photos_start(tid: str, request: Request):
         # consent screen -> straight into the real picker, same popup tab.
         # next stays only as a fallback for if that immediate re-open fails.
         next_url = f"/trips/{tid}?" + urllib.parse.urlencode({"resume_photos": "1"})
-        connect_url = "/oauth/photos/start?" + urllib.parse.urlencode({"next": next_url, "tid": tid})
-        return JSONResponse({"error": "connect Google Photos first",
-                              "connect_url": connect_url}, status_code=401)
+        connect_url = "/oauth/photos/start?" + urllib.parse.urlencode(
+            {"next": next_url, "tid": tid}
+        )
+        return JSONResponse(
+            {"error": "connect Google Photos first", "connect_url": connect_url}, status_code=401
+        )
     except Exception as e:
-        traceback.print_exc()      # otherwise a 500 here leaves zero trace in the logs
+        traceback.print_exc()  # otherwise a 500 here leaves zero trace in the logs
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
@@ -826,7 +928,7 @@ def reroll_theme(tid: str):
     if not spec_path.exists():
         return JSONResponse({"error": "build the page first"}, status_code=400)
     spec = json.loads(spec_path.read_text(encoding="utf-8"))
-    spec["theme"] = palette.generate_palette(uuid.uuid4().hex)   # fresh random seed, not the trip id
+    spec["theme"] = palette.generate_palette(uuid.uuid4().hex)  # fresh random seed, not the trip id
     spec_path.write_bytes((json.dumps(spec, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
     html = build_trip.build(spec, TEMPLATE)
     (trip_dir(tid) / "page.html").write_bytes(html.replace("\r\n", "\n").encode("utf-8"))
@@ -841,16 +943,20 @@ def reroll_theme(tid: str):
 # threading.Thread fallback. Protected by verifying the OIDC token Cloud
 # Tasks attaches to the request - see tasks.py's oidc_token config.
 
+
 def _verify_task_auth(authorization: str, expected_audience: str) -> None:
     if not config.CLOUD_TASKS_QUEUE:
-        return   # local dev: no GCP infra configured - unused, the thread fallback never calls these
+        return  # local dev: no GCP infra configured - unused, the thread fallback never calls these
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=403, detail="missing task auth")
     from google.auth.transport import requests as g_requests
     from google.oauth2 import id_token
-    token = authorization[len("Bearer "):]
+
+    token = authorization[len("Bearer ") :]
     try:
-        claims = id_token.verify_oauth2_token(token, g_requests.Request(), audience=expected_audience)
+        claims = id_token.verify_oauth2_token(
+            token, g_requests.Request(), audience=expected_audience
+        )
     except Exception:
         raise HTTPException(status_code=403, detail="invalid task auth")
     if config.TASKS_INVOKER_SA and claims.get("email") != config.TASKS_INVOKER_SA:

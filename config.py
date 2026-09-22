@@ -30,6 +30,7 @@ SESSION_SECRET fallback in webapp.py).
                         email is printed to the server log instead of sent,
                         so local dev works without a Resend account.
 """
+
 import os
 import pathlib
 
@@ -40,5 +41,6 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 CLOUD_TASKS_QUEUE = os.environ.get("CLOUD_TASKS_QUEUE")
 TASKS_INVOKER_SA = os.environ.get("TASKS_INVOKER_SA")
 OAUTH_WEB_CLIENT_PATH = pathlib.Path(
-    os.environ.get("OAUTH_WEB_CLIENT_PATH", str(ROOT / "credentials_web.json")))
+    os.environ.get("OAUTH_WEB_CLIENT_PATH", str(ROOT / "credentials_web.json"))
+)
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY")

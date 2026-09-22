@@ -28,8 +28,10 @@ First run pops a browser to authorise; the token is cached in token.json.
 Output
 ------
     gphotos/IMG_xxxx.jpg ...     downscaled copies of the picked photos
-    gphotos/manifest.json        {downscale_px, items:[{id,file,createTime,width,height,orig_width,orig_height}]}
+    gphotos/manifest.json        {downscale_px, items:[{id,file,createTime,width,
+                                  height,orig_width,orig_height}]}
 """
+
 from __future__ import annotations
 
 import argparse
@@ -54,6 +56,7 @@ class PhotosNotConnected(Exception):
     Google Photos account yet (no photo_accounts row) - callers should catch
     this and send the user to /oauth/photos/start."""
 
+
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception:
@@ -73,16 +76,19 @@ def _ok(r):
             body = r.text[:800]
         print(f"\nHTTP {r.status_code} from {r.request.method} {r.url}\n{body}\n", file=sys.stderr)
         if r.status_code in (403, 401):
-            print("  most likely: the 'Photos Picker API' is not enabled on this project, or\n"
-                  "  the granted token lacks the photospicker scope (delete token.json and re-run).\n"
-                  "  Enable it:  https://console.cloud.google.com/apis/library/photospicker.googleapis.com\n",
-                  file=sys.stderr)
+            print(
+                "  most likely: the 'Photos Picker API' is not enabled on this project, or\n"
+                "  the granted token lacks the photospicker scope (delete token.json and re-run).\n"
+                "  Enable it:  "
+                "https://console.cloud.google.com/apis/library/photospicker.googleapis.com\n",
+                file=sys.stderr,
+            )
         r.raise_for_status()
     return r
 
 
 def _duration_seconds(s, default: float) -> float:
-    m = re.match(r"([0-9.]+)s?$", str(s or "").strip())      # protobuf duration "3.5s"
+    m = re.match(r"([0-9.]+)s?$", str(s or "").strip())  # protobuf duration "3.5s"
     return float(m.group(1)) if m else default
 
 
@@ -97,7 +103,8 @@ def authorise(creds_path: pathlib.Path, token_path: pathlib.Path) -> AuthorizedS
             if not creds_path.exists():
                 sys.exit(f"missing {creds_path} - see the setup notes at the top of this file")
             creds = InstalledAppFlow.from_client_secrets_file(
-                str(creds_path), SCOPES).run_local_server(port=0)
+                str(creds_path), SCOPES
+            ).run_local_server(port=0)
         token_path.write_text(creds.to_json(), encoding="utf-8")
     return AuthorizedSession(creds)
 
@@ -122,7 +129,10 @@ def open_session(creds_path: pathlib.Path, token_path: pathlib.Path):
 # used by authorise() above - see credentials_web.json and the operator note
 # next to the /oauth/photos/start route in webapp.py.
 
-def build_auth_url(client_secrets_path: pathlib.Path, redirect_uri: str, state: str) -> tuple[str, str]:
+
+def build_auth_url(
+    client_secrets_path: pathlib.Path, redirect_uri: str, state: str
+) -> tuple[str, str]:
     """-> (auth_url, code_verifier). access_type="offline" is required to get
     a refresh_token back.
 
@@ -134,18 +144,24 @@ def build_auth_url(client_secrets_path: pathlib.Path, redirect_uri: str, state: 
     session, alongside state) and pass it back into exchange_code(), or
     Google rejects the token exchange with "invalid_grant: Missing code
     verifier" (this bit us the first time through)."""
-    flow = Flow.from_client_secrets_file(str(client_secrets_path), SCOPES, redirect_uri=redirect_uri)
+    flow = Flow.from_client_secrets_file(
+        str(client_secrets_path), SCOPES, redirect_uri=redirect_uri
+    )
     url, _ = flow.authorization_url(
-        access_type="offline", include_granted_scopes="true", prompt="consent", state=state)
+        access_type="offline", include_granted_scopes="true", prompt="consent", state=state
+    )
     return url, flow.code_verifier
 
 
-def exchange_code(client_secrets_path: pathlib.Path, redirect_uri: str, code: str,
-                   code_verifier: str) -> Credentials:
+def exchange_code(
+    client_secrets_path: pathlib.Path, redirect_uri: str, code: str, code_verifier: str
+) -> Credentials:
     """Completes the flow server-side once Google redirects back with ?code=...
     code_verifier must be the same one returned by build_auth_url() for this
     same login attempt (see its docstring - PKCE)."""
-    flow = Flow.from_client_secrets_file(str(client_secrets_path), SCOPES, redirect_uri=redirect_uri)
+    flow = Flow.from_client_secrets_file(
+        str(client_secrets_path), SCOPES, redirect_uri=redirect_uri
+    )
     flow.code_verifier = code_verifier
     flow.fetch_token(code=code)
     return flow.credentials
@@ -173,13 +189,18 @@ def migrate_guest_connection(guest_id: str, owner_key: str) -> None:
     if not guest_id:
         return
     import db as _db
+
     guest_key = f"guest:{guest_id}"
     with _db.db() as c:
-        has_own = c.execute("SELECT 1 FROM photo_accounts WHERE owner_key=?", (owner_key,)).fetchone()
+        has_own = c.execute(
+            "SELECT 1 FROM photo_accounts WHERE owner_key=?", (owner_key,)
+        ).fetchone()
         if has_own:
             c.execute("DELETE FROM photo_accounts WHERE owner_key=?", (guest_key,))
         else:
-            c.execute("UPDATE photo_accounts SET owner_key=? WHERE owner_key=?", (owner_key, guest_key))
+            c.execute(
+                "UPDATE photo_accounts SET owner_key=? WHERE owner_key=?", (owner_key, guest_key)
+            )
 
 
 def save_user_credentials(owner_key: str, creds: Credentials) -> None:
@@ -190,17 +211,19 @@ def save_user_credentials(owner_key: str, creds: Credentials) -> None:
     webapp.photo_owner_key) - not a users.id FK, so a guest can connect their
     own Google Photos without ever creating a MemoTrip account."""
     import db as _db
+
     expiry = creds.expiry.isoformat() if creds.expiry else None
     with _db.db() as c:
-        c.execute("""INSERT INTO photo_accounts(owner_key, refresh_token, access_token,
+        c.execute(
+            """INSERT INTO photo_accounts(owner_key, refresh_token, access_token,
                      token_expiry, granted) VALUES(?,?,?,?,?)
                      ON CONFLICT(owner_key) DO UPDATE SET
                      refresh_token=excluded.refresh_token,
                      access_token=excluded.access_token,
                      token_expiry=excluded.token_expiry,
                      granted=excluded.granted""",
-                  (owner_key, creds.refresh_token, creds.token, expiry,
-                   time.strftime("%Y-%m-%d %H:%M")))
+            (owner_key, creds.refresh_token, creds.token, expiry, time.strftime("%Y-%m-%d %H:%M")),
+        )
 
 
 def authorise_for_user(owner_key: str, client_secrets_path: pathlib.Path) -> AuthorizedSession:
@@ -211,6 +234,7 @@ def authorise_for_user(owner_key: str, client_secrets_path: pathlib.Path) -> Aut
     photo_owner_key is None - "WHERE owner_key=NULL" matches no row in either
     sqlite or Postgres)."""
     import db as _db
+
     with _db.db() as c:
         row = c.execute("SELECT * FROM photo_accounts WHERE owner_key=?", (owner_key,)).fetchone()
     if not row or not row["refresh_token"]:
@@ -218,10 +242,14 @@ def authorise_for_user(owner_key: str, client_secrets_path: pathlib.Path) -> Aut
     client_id, client_secret = _web_client_info(client_secrets_path)
     expiry = datetime.datetime.fromisoformat(row["token_expiry"]) if row["token_expiry"] else None
     creds = Credentials(
-        token=row["access_token"], refresh_token=row["refresh_token"],
+        token=row["access_token"],
+        refresh_token=row["refresh_token"],
         token_uri="https://oauth2.googleapis.com/token",
-        client_id=client_id, client_secret=client_secret, scopes=SCOPES,
-        expiry=expiry)
+        client_id=client_id,
+        client_secret=client_secret,
+        scopes=SCOPES,
+        expiry=expiry,
+    )
     if not creds.valid:
         try:
             creds.refresh(Request())
@@ -235,6 +263,7 @@ def authorise_for_user(owner_key: str, client_secrets_path: pathlib.Path) -> Aut
             # through /oauth/photos/start for a fresh consent instead of
             # seeing a raw Google error.
             import db as _db
+
             with _db.db() as c:
                 c.execute("DELETE FROM photo_accounts WHERE owner_key=?", (owner_key,))
             raise PhotosNotConnected(f"{owner_key}'s Google Photos token was revoked/expired")
@@ -260,9 +289,12 @@ def open_session_for_user(owner_key: str, client_secrets_path: pathlib.Path):
         return http, _ok(http.post(f"{BASE}/sessions", json={})).json()
     except RefreshError:
         import db as _db
+
         with _db.db() as c:
             c.execute("DELETE FROM photo_accounts WHERE owner_key=?", (owner_key,))
-        raise PhotosNotConnected(f"{owner_key}'s Google Photos token was revoked/expired (during use)")
+        raise PhotosNotConnected(
+            f"{owner_key}'s Google Photos token was revoked/expired (during use)"
+        )
 
 
 def session_ready(http: AuthorizedSession, sid: str) -> bool:
@@ -284,7 +316,8 @@ def wait_for_pick(http: AuthorizedSession, session: dict) -> None:
     sid = session["id"]
     poll = _duration_seconds(session.get("pollingConfig", {}).get("pollInterval"), 3.0)
     deadline = time.time() + _duration_seconds(
-        session.get("pollingConfig", {}).get("timeoutIn"), 600.0)
+        session.get("pollingConfig", {}).get("timeoutIn"), 600.0
+    )
     print("\n  1. open this link, pick the trip photos, then click 'Done':\n")
     print("     " + session["pickerUri"] + "\n")
     print("  waiting for you to finish in the browser ", end="", flush=True)
@@ -332,30 +365,43 @@ def download(http: AuthorizedSession, items: list[dict], out: pathlib.Path, px: 
         r = _ok(http.get(f'{mf["baseUrl"]}=w{px}-h{px}'))
         (out / name).write_bytes(r.content)
         n += 1
-        manifest.append({
-            "id": it["id"],
-            "file": name,
-            "createTime": it.get("createTime", ""),
-            "orig_width": int(meta.get("width") or 0),
-            "orig_height": int(meta.get("height") or 0),
-        })
+        manifest.append(
+            {
+                "id": it["id"],
+                "file": name,
+                "createTime": it.get("createTime", ""),
+                "orig_width": int(meta.get("width") or 0),
+                "orig_height": int(meta.get("height") or 0),
+            }
+        )
         print(f"    {name}  ({len(r.content)//1024} KB)")
-    (out / "manifest.json").write_bytes((json.dumps(
-        {"downscale_px": px, "count": n, "items": manifest},
-        ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
+    (out / "manifest.json").write_bytes(
+        (
+            json.dumps(
+                {"downscale_px": px, "count": n, "items": manifest}, ensure_ascii=False, indent=2
+            )
+            + "\n"
+        ).encode("utf-8")
+    )
     return manifest
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--out", default="gphotos", help="folder for the downscaled photos + manifest.json")
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    ap.add_argument(
+        "--out", default="gphotos", help="folder for the downscaled photos + manifest.json"
+    )
     ap.add_argument("--size", type=int, default=1600, help="long-edge px of the downloaded copies")
     ap.add_argument("--credentials", default="credentials.json")
     ap.add_argument("--token", default="token.json")
     a = ap.parse_args()
 
     root = pathlib.Path(__file__).resolve().parent
-    rel = lambda x: pathlib.Path(x) if pathlib.Path(x).is_absolute() else root / x
+
+    def rel(x):
+        return pathlib.Path(x) if pathlib.Path(x).is_absolute() else root / x
 
     http = authorise(rel(a.credentials), rel(a.token))
     session = _ok(http.post(f"{BASE}/sessions", json={})).json()

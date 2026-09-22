@@ -23,6 +23,7 @@ Examples
 
 Needs: Pillow (always). google-genai only for the --ai path.
 """
+
 from __future__ import annotations
 
 try:
@@ -31,14 +32,13 @@ except Exception:
     pass
 
 import argparse
-import base64
 import datetime as dt
 import io
 import json
 import os
 import pathlib
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 try:
     from PIL import Image, ImageOps, ImageStat, ImageFilter
@@ -59,10 +59,11 @@ EXIF_DATETIME = 306
 
 # --------------------------------------------------------------------------- data
 
+
 @dataclass
 class Photo:
     path: pathlib.Path
-    taken: dt.datetime | None            # naive UTC (best effort)
+    taken: dt.datetime | None  # naive UTC (best effort)
     width: int = 0
     height: int = 0
     # filled in during analysis
@@ -77,15 +78,17 @@ class Photo:
 class Target:
     """One photo-gallery slot: a single calendar day (a `day` timeline item) or
     a one-off `layover`. Each calendar date maps to exactly one Target."""
-    id: str                 # output id, e.g. "capelas-d2" or "lisbon_layover"
+
+    id: str  # output id, e.g. "capelas-d2" or "lisbon_layover"
     date: dt.date
     title: str = ""
-    kind: str = "day"        # "day" | "layover"
-    item: dict | None = None    # the `day` item to write .tripPhotos back onto
-    key: str = ""             # for "layover": which spec["photos"][key]["trip"] to fill
+    kind: str = "day"  # "day" | "layover"
+    item: dict | None = None  # the `day` item to write .tripPhotos back onto
+    key: str = ""  # for "layover": which spec["photos"][key]["trip"] to fill
 
 
 # ----------------------------------------------------------------------- loading
+
 
 def _parse_iso(s: str) -> dt.datetime | None:
     if not s:
@@ -127,12 +130,14 @@ def load_from_manifest(manifest: pathlib.Path, media_dir: pathlib.Path) -> list[
             continue
         # dims are read from the file in analyse(); orig_* (pre-downscale) drives the
         # resolution bonus so a downscaled 12MP shot still outranks a downscaled phone crop
-        out.append(Photo(
-            path=p,
-            taken=_parse_iso(it.get("createTime", "")),
-            width=int(it.get("orig_width") or it.get("width") or 0),
-            height=int(it.get("orig_height") or it.get("height") or 0),
-        ))
+        out.append(
+            Photo(
+                path=p,
+                taken=_parse_iso(it.get("createTime", "")),
+                width=int(it.get("orig_width") or it.get("width") or 0),
+                height=int(it.get("orig_height") or it.get("height") or 0),
+            )
+        )
     return out
 
 
@@ -161,23 +166,35 @@ def load_targets(spec: dict) -> list[Target]:
     targets: list[Target] = []
     for item in spec.get("timeline", []):
         if item.get("type") == "day" and item.get("date"):
-            targets.append(Target(
-                id=f'{item["key"]}-d{item["dayIndex"]}', date=dt.date.fromisoformat(item["date"]),
-                title=item.get("title") or item.get("city") or item["key"],
-                kind="day", item=item, key=item["key"]))
+            targets.append(
+                Target(
+                    id=f'{item["key"]}-d{item["dayIndex"]}',
+                    date=dt.date.fromisoformat(item["date"]),
+                    title=item.get("title") or item.get("city") or item["key"],
+                    kind="day",
+                    item=item,
+                    key=item["key"],
+                )
+            )
         elif item.get("type") == "layover":
             rng = item.get("dateRange")
             if isinstance(rng, list) and rng and rng[0]:
-                targets.append(Target(
-                    id=item["key"], date=dt.date.fromisoformat(rng[0]),
-                    title=item.get("title") or item.get("city") or item["key"],
-                    kind="layover", key=item["key"]))
+                targets.append(
+                    Target(
+                        id=item["key"],
+                        date=dt.date.fromisoformat(rng[0]),
+                        title=item.get("title") or item.get("city") or item["key"],
+                        kind="layover",
+                        key=item["key"],
+                    )
+                )
             else:
                 print(f"  ! {item.get('key')} has no dateRange - skipped", file=sys.stderr)
     return targets
 
 
 # --------------------------------------------------------------------- analysis
+
 
 def _prep_gray(img: Image.Image, box: int = 512) -> Image.Image:
     img = ImageOps.exif_transpose(img)
@@ -199,13 +216,13 @@ def exposure_penalty(gray: Image.Image) -> float:
     crushed = sum(h[:6]) / total
     blown = sum(h[250:]) / total
     stdev = ImageStat.Stat(gray).stddev[0]
-    flat = max(0.0, (28.0 - stdev) / 28.0)          # low-contrast frames
+    flat = max(0.0, (28.0 - stdev) / 28.0)  # low-contrast frames
     return min(1.5, crushed * 2.2 + blown * 2.2 + flat)
 
 
 def dhash(gray9x8: Image.Image) -> int:
     g = gray9x8.resize((9, 8)).convert("L")
-    px = g.tobytes()                      # 72 bytes, one grey level per pixel
+    px = g.tobytes()  # 72 bytes, one grey level per pixel
     bits = 0
     for row in range(8):
         for col in range(8):
@@ -243,8 +260,11 @@ def analyse(photos: list[Photo]) -> None:
 
 # ---------------------------------------------------------------------- bucketing
 
-def bucket(photos: list[Photo], targets: list[Target], tz_offset_h: float) -> dict[str, list[Photo]]:
-    by_date: dict[dt.date, Target] = {t.date: t for t in targets}   # day-expansion -> no overlaps
+
+def bucket(
+    photos: list[Photo], targets: list[Target], tz_offset_h: float
+) -> dict[str, list[Photo]]:
+    by_date: dict[dt.date, Target] = {t.date: t for t in targets}  # day-expansion -> no overlaps
     by_id: dict[str, list[Photo]] = {t.id: [] for t in targets}
     unmatched = 0
     off = dt.timedelta(hours=tz_offset_h)
@@ -266,6 +286,7 @@ def bucket(photos: list[Photo], targets: list[Target], tz_offset_h: float) -> di
 
 # ------------------------------------------------------------------- de-dup + pick
 
+
 def dedupe(cands: list[Photo], max_dist: int) -> list[Photo]:
     kept: list[Photo] = []
     for p in sorted(cands, key=lambda x: x.score, reverse=True):
@@ -283,7 +304,7 @@ def pick_diverse(cands: list[Photo], n: int, spread_dist: int) -> list[Photo]:
             break
         if all(hamming(p.dhash, q.dhash) >= spread_dist for q in picks):
             picks.append(p)
-    if len(picks) < n:                       # loosen if we came up short
+    if len(picks) < n:  # loosen if we came up short
         for p in pool:
             if len(picks) >= n:
                 break
@@ -292,8 +313,9 @@ def pick_diverse(cands: list[Photo], n: int, spread_dist: int) -> list[Photo]:
     return picks[:n]
 
 
-def _gemini_pick_raw(cands: list[Photo], n: int, model: str, api_key: str,
-                     instruction: str) -> list[Photo] | None:
+def _gemini_pick_raw(
+    cands: list[Photo], n: int, model: str, api_key: str, instruction: str
+) -> list[Photo] | None:
     """Shared Gemini call: send `instruction` + every candidate as a labelled
     thumbnail, get back an ordered list of picks (best first)."""
     try:
@@ -327,8 +349,9 @@ def _gemini_pick_raw(cands: list[Photo], n: int, model: str, api_key: str,
             },
             "required": ["picks"],
         }
-        data = gu.generate_json(model, [types.Content(role="user", parts=parts)],
-                                schema=schema, temperature=0.4, cl=cl)
+        data = gu.generate_json(
+            model, [types.Content(role="user", parts=parts)], schema=schema, temperature=0.4, cl=cl
+        )
         idx = [int(x["index"]) for x in data.get("picks", []) if 0 <= int(x["index"]) < len(cands)]
         seen, ordered = set(), []
         for i in idx:
@@ -341,17 +364,21 @@ def _gemini_pick_raw(cands: list[Photo], n: int, model: str, api_key: str,
         return None
 
 
-def pick_with_gemini(cands: list[Photo], n: int, model: str, api_key: str,
-                     stay_title: str) -> list[Photo] | None:
+def pick_with_gemini(
+    cands: list[Photo], n: int, model: str, api_key: str, stay_title: str
+) -> list[Photo] | None:
     instruction = (
         f"These are candidate photos for one leg of a trip ('{stay_title}'). "
         f"Choose the {n} best to show together. Favour sharp, well-exposed, "
         f"interesting frames, and make the set varied - different scenes, "
-        f"subjects and moments, never near-duplicates. Reply as JSON.")
+        f"subjects and moments, never near-duplicates. Reply as JSON."
+    )
     return _gemini_pick_raw(cands, n, model, api_key, instruction)
 
 
-def pick_hero_with_gemini(cands: list[Photo], n: int, model: str, api_key: str) -> list[Photo] | None:
+def pick_hero_with_gemini(
+    cands: list[Photo], n: int, model: str, api_key: str
+) -> list[Photo] | None:
     """For the page's hero background + featured card, not a day's gallery:
     the single most striking, sweeping SCENERY shots from the whole trip,
     ranked best-first — deliberately independent of any day's own picks."""
@@ -362,14 +389,22 @@ def pick_hero_with_gemini(cands: list[Photo], n: int, model: str, api_key: str) 
         f"dramatic nature or cityscapes. Avoid close-ups of food, documents, indoor detail "
         f"shots, or a photo where a person's face fills the frame. Order picks best first. "
         f"It's completely fine if a pick also belongs to (and will separately appear in) "
-        f"its own day's gallery later on the page. Reply as JSON.")
+        f"its own day's gallery later on the page. Reply as JSON."
+    )
     return _gemini_pick_raw(cands, n, model, api_key, instruction)
 
 
 # ---------------------------------------------------------------------- output
 
-def export(picks: list[Photo], key: str, images_dir: pathlib.Path, max_px: int,
-           rel_prefix: str = "images/trips", preserve_order: bool = False) -> list[str]:
+
+def export(
+    picks: list[Photo],
+    key: str,
+    images_dir: pathlib.Path,
+    max_px: int,
+    rel_prefix: str = "images/trips",
+    preserve_order: bool = False,
+) -> list[str]:
     images_dir.mkdir(parents=True, exist_ok=True)
     rel: list[str] = []
     ordered = picks if preserve_order else sorted(picks, key=lambda x: (x.taken or dt.datetime.min))
@@ -385,11 +420,27 @@ def export(picks: list[Photo], key: str, images_dir: pathlib.Path, max_px: int,
 
 # ------------------------------------------------------------------------- main
 
-def select(photos: list[Photo], spec: dict, images_dir: pathlib.Path, *,
-           per_region=3, minimum=2, candidates=12, dupe_distance=10, spread_distance=16,
-           blur_min=0.0, max_px=1600, tz_offset=None, use_ai=True, model="gemini-3.6-flash",
-           lodging_count=2, lodging_dir: pathlib.Path | None = None,
-           dry_run=False, log=print) -> dict:
+
+def select(
+    photos: list[Photo],
+    spec: dict,
+    images_dir: pathlib.Path,
+    *,
+    per_region=3,
+    minimum=2,
+    candidates=12,
+    dupe_distance=10,
+    spread_distance=16,
+    blur_min=0.0,
+    max_px=1600,
+    tz_offset=None,
+    use_ai=True,
+    model="gemini-3.6-flash",
+    lodging_count=2,
+    lodging_dir: pathlib.Path | None = None,
+    dry_run=False,
+    log=print,
+) -> dict:
     """Bucket by exact calendar day -> score -> pick -> export. Writes each `day`
     item's `tripPhotos` in place (and `photos[key]['trip']` for `layover`s). On a
     check-in day (`isCheckIn`), also picks `lodging_count` more photos - from the
@@ -398,7 +449,11 @@ def select(photos: list[Photo], spec: dict, images_dir: pathlib.Path, *,
     targets = load_targets(spec)
     if not targets:
         raise ValueError("לא נמצאו ימים/עצירות במסלול הטיול")
-    tz_off = tz_offset if tz_offset is not None else float(spec.get("meta", {}).get("tz_offset_hours", 0))
+    tz_off = (
+        tz_offset
+        if tz_offset is not None
+        else float(spec.get("meta", {}).get("tz_offset_hours", 0))
+    )
     lodging_dir = lodging_dir if lodging_dir is not None else images_dir.parent / "lodging"
 
     analyse(photos)
@@ -424,36 +479,45 @@ def select(photos: list[Photo], spec: dict, images_dir: pathlib.Path, *,
         if not chosen:
             chosen = pick_diverse(cands, n, spread_distance)
         ordered = sorted(chosen, key=lambda x: (x.taken or dt.datetime.min))
-        log(f"{t.id}: {len(pics)} that day -> pick {len(ordered)}"
-            + ("  [gemini]" if ai_on and len(cands) > n and chosen else "  [offline]"))
-        plan[t.id] = ([p.path.name for p in ordered] if dry_run
-                      else export(ordered, t.id, images_dir, max_px))
+        log(
+            f"{t.id}: {len(pics)} that day -> pick {len(ordered)}"
+            + ("  [gemini]" if ai_on and len(cands) > n and chosen else "  [offline]")
+        )
+        plan[t.id] = (
+            [p.path.name for p in ordered] if dry_run else export(ordered, t.id, images_dir, max_px)
+        )
 
         if t.kind == "day" and t.item.get("isCheckIn") and lodging_count > 0:
             used = {p.path for p in chosen}
-            pool = sorted((p for p in good if p.path not in used),
-                          key=lambda x: x.score, reverse=True)[:candidates]
+            pool = sorted(
+                (p for p in good if p.path not in used), key=lambda x: x.score, reverse=True
+            )[:candidates]
             ln = min(lodging_count, len(pool))
             lchosen = None
             if ln and ai_on and len(pool) > ln:
-                lchosen = pick_with_gemini(pool, ln, model, api_key,
-                                           f"{t.title} - תמונות של הדירה/הבית עצמו, לא מהטיול")
+                lchosen = pick_with_gemini(
+                    pool, ln, model, api_key, f"{t.title} - תמונות של הדירה/הבית עצמו, לא מהטיול"
+                )
             if ln and not lchosen:
                 lchosen = pick_diverse(pool, ln, spread_distance)
             if lchosen:
                 lordered = sorted(lchosen, key=lambda x: (x.taken or dt.datetime.min))
-                log(f"{t.id}: + {len(lordered)} lodging photo(s)"
-                    + ("  [gemini]" if ai_on and len(pool) > ln and lchosen else "  [offline]"))
-                lodging_plan[t.id] = ([p.path.name for p in lordered] if dry_run
-                                      else export(lordered, t.key, lodging_dir, max_px,
-                                                  rel_prefix="images/lodging"))
+                log(
+                    f"{t.id}: + {len(lordered)} lodging photo(s)"
+                    + ("  [gemini]" if ai_on and len(pool) > ln and lchosen else "  [offline]")
+                )
+                lodging_plan[t.id] = (
+                    [p.path.name for p in lordered]
+                    if dry_run
+                    else export(lordered, t.key, lodging_dir, max_px, rel_prefix="images/lodging")
+                )
 
     # the page's hero background + "featured" card: the most striking SCENERY
     # shots from the WHOLE trip (not bucketed by day), independent of any
     # single day's own picks - it's fine if a hero pick also appears again in
     # its own day's gallery below. Ranked best-first: [0] -> background, [1] -> card.
     hero_n = 2
-    hero_pool = sorted(photos, key=lambda x: x.score, reverse=True)[:max(candidates, hero_n * 6)]
+    hero_pool = sorted(photos, key=lambda x: x.score, reverse=True)[: max(candidates, hero_n * 6)]
     hero_chosen = None
     if hero_pool:
         if ai_on and len(hero_pool) > hero_n:
@@ -461,8 +525,10 @@ def select(photos: list[Photo], spec: dict, images_dir: pathlib.Path, *,
         if not hero_chosen:
             hero_chosen = pick_diverse(hero_pool, hero_n, spread_distance)
     if hero_chosen:
-        log(f"hero: picked {len(hero_chosen)} scenic photo(s) from the whole trip"
-            + ("  [gemini]" if ai_on and len(hero_pool) > hero_n else "  [offline]"))
+        log(
+            f"hero: picked {len(hero_chosen)} scenic photo(s) from the whole trip"
+            + ("  [gemini]" if ai_on and len(hero_pool) > hero_n else "  [offline]")
+        )
 
     if not dry_run:
         by_id = {t.id: t for t in targets}
@@ -479,7 +545,8 @@ def select(photos: list[Photo], spec: dict, images_dir: pathlib.Path, *,
             spec["photos"][t.key]["lodging"] = paths
         if hero_chosen:
             spec.setdefault("hero", {})["photos"] = export(
-                hero_chosen, "hero", images_dir, max_px, preserve_order=True)
+                hero_chosen, "hero", images_dir, max_px, preserve_order=True
+            )
     return spec
 
 
@@ -490,7 +557,9 @@ def load_photos(source: str, *, manifest=None, media_dir=None, folder=None) -> l
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     ap.add_argument("--spec", default="trip_spec.json")
     ap.add_argument("--source", choices=["picker", "folder"], default="picker")
     ap.add_argument("--manifest", default="gphotos/manifest.json")
@@ -499,58 +568,104 @@ def main() -> int:
     ap.add_argument("--per-region", type=int, default=3, help="trip photos per day")
     ap.add_argument("--min", type=int, default=2, dest="minimum")
     ap.add_argument("--candidates", type=int, default=14)
-    ap.add_argument("--lodging-count", type=int, default=2,
-                    help="extra photos to pick for the lodging itself on check-in days")
+    ap.add_argument(
+        "--lodging-count",
+        type=int,
+        default=2,
+        help="extra photos to pick for the lodging itself on check-in days",
+    )
     ap.add_argument("--lodging-dir", default="images/lodging")
-    ap.add_argument("--dupe-distance", type=int, default=10, help="dHash Hamming <= this = duplicate")
-    ap.add_argument("--spread-distance", type=int, default=16, help="dHash Hamming >= this = 'different enough'")
-    ap.add_argument("--blur-min", type=float, default=0.0, help="drop frames below this Laplacian variance")
+    ap.add_argument(
+        "--dupe-distance", type=int, default=10, help="dHash Hamming <= this = duplicate"
+    )
+    ap.add_argument(
+        "--spread-distance", type=int, default=16, help="dHash Hamming >= this = 'different enough'"
+    )
+    ap.add_argument(
+        "--blur-min", type=float, default=0.0, help="drop frames below this Laplacian variance"
+    )
     ap.add_argument("--max-px", type=int, default=1600, help="long edge of exported jpg")
-    ap.add_argument("--tz-offset", type=float, default=None, help="hours to add to photo UTC time before taking the date")
+    ap.add_argument(
+        "--tz-offset",
+        type=float,
+        default=None,
+        help="hours to add to photo UTC time before taking the date",
+    )
     ap.add_argument("--ai", dest="ai", action="store_true", default=True)
     ap.add_argument("--no-ai", dest="ai", action="store_false")
-    ap.add_argument("--model", default="gemini-3.6-flash",
-                    help="if this 404s, list options: py -c \"from google import genai,os; "
-                         "[print(m.name) for m in genai.Client(api_key=os.environ['GEMINI_API_KEY']).models.list()]\"")
+    ap.add_argument(
+        "--model",
+        default="gemini-3.6-flash",
+        help='if this 404s, list options: py -c "from google import genai,os; '
+        "[print(m.name) for m in "
+        "genai.Client(api_key=os.environ['GEMINI_API_KEY']).models.list()]\"",
+    )
     ap.add_argument("--images-dir", default="images/trips")
-    ap.add_argument("--clean-source", action="store_true", help="delete --media-dir/--folder after a successful run")
+    ap.add_argument(
+        "--clean-source",
+        action="store_true",
+        help="delete --media-dir/--folder after a successful run",
+    )
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
 
     root = pathlib.Path(__file__).resolve().parent
-    rel = lambda x: pathlib.Path(x) if pathlib.Path(x).is_absolute() else root / x
+
+    def rel(x):
+        return pathlib.Path(x) if pathlib.Path(x).is_absolute() else root / x
 
     spec_path = rel(a.spec)
     spec = json.loads(spec_path.read_text(encoding="utf-8"))
     if a.source == "folder" and not a.folder:
         sys.exit("--source folder needs --folder <path>")
-    photos = load_photos(a.source, manifest=rel(a.manifest), media_dir=rel(a.media_dir),
-                         folder=rel(a.folder) if a.folder else None)
+    photos = load_photos(
+        a.source,
+        manifest=rel(a.manifest),
+        media_dir=rel(a.media_dir),
+        folder=rel(a.folder) if a.folder else None,
+    )
     if not photos:
         sys.exit("no photos loaded")
     print(f"loaded {len(photos)} photo(s)")
 
-    select(photos, spec, rel(a.images_dir),
-           per_region=a.per_region, minimum=a.minimum, candidates=a.candidates,
-           dupe_distance=a.dupe_distance, spread_distance=a.spread_distance,
-           blur_min=a.blur_min, max_px=a.max_px, tz_offset=a.tz_offset,
-           use_ai=a.ai, model=a.model, lodging_count=a.lodging_count, lodging_dir=rel(a.lodging_dir),
-           dry_run=a.dry_run, log=lambda m: print("  " + m))
+    select(
+        photos,
+        spec,
+        rel(a.images_dir),
+        per_region=a.per_region,
+        minimum=a.minimum,
+        candidates=a.candidates,
+        dupe_distance=a.dupe_distance,
+        spread_distance=a.spread_distance,
+        blur_min=a.blur_min,
+        max_px=a.max_px,
+        tz_offset=a.tz_offset,
+        use_ai=a.ai,
+        model=a.model,
+        lodging_count=a.lodging_count,
+        lodging_dir=rel(a.lodging_dir),
+        dry_run=a.dry_run,
+        log=lambda m: print("  " + m),
+    )
 
     if a.dry_run:
         print("\n--dry-run: nothing written (picks logged above).")
         return 0
 
     spec_path.write_bytes((json.dumps(spec, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
-    total = (sum(len(it.get("tripPhotos", [])) for it in spec.get("timeline", []) if it.get("type") == "day")
-             + sum(len(v.get("trip", [])) for v in spec.get("photos", {}).values()))
+    total = sum(
+        len(it.get("tripPhotos", [])) for it in spec.get("timeline", []) if it.get("type") == "day"
+    ) + sum(len(v.get("trip", [])) for v in spec.get("photos", {}).values())
     lodging_total = sum(len(v.get("lodging", [])) for v in spec.get("photos", {}).values())
     hero_total = len(spec.get("hero", {}).get("photos") or [])
-    print(f"\nwrote {total} trip + {lodging_total} lodging + {hero_total} hero photo(s) into "
-          f"{a.images_dir}/ + {a.lodging_dir}/ and updated {a.spec}")
+    print(
+        f"\nwrote {total} trip + {lodging_total} lodging + {hero_total} hero photo(s) into "
+        f"{a.images_dir}/ + {a.lodging_dir}/ and updated {a.spec}"
+    )
 
     if a.clean_source:
         import shutil
+
         src = rel(a.folder) if a.source == "folder" else rel(a.media_dir)
         shutil.rmtree(src, ignore_errors=True)
         print(f"removed source folder {src}")

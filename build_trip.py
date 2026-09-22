@@ -10,6 +10,7 @@ Usage:
     python build_trip.py                                  # spec=trip_spec.json, out=dist/trip.html
     python build_trip.py --spec other.json --out page.html
 """
+
 import argparse
 import json
 import pathlib
@@ -22,8 +23,7 @@ import palette
 def _stats(items, indent):
     pad = " " * indent
     return "\n".join(
-        f'{pad}<div><div class="n">{s["n"]}</div><div class="l">{s["l"]}</div></div>'
-        for s in items
+        f'{pad}<div><div class="n">{s["n"]}</div><div class="l">{s["l"]}</div></div>' for s in items
     )
 
 
@@ -45,8 +45,7 @@ def _econ_bars(items):
 
 def _econ_notes(items):
     return "\n".join(
-        f'      <div class="fn"><span class="fn-k">{n["k"]}</span>{n["html"]}</div>'
-        for n in items
+        f'      <div class="fn"><span class="fn-k">{n["k"]}</span>{n["html"]}</div>' for n in items
     )
 
 
@@ -55,8 +54,12 @@ def _json_block(obj):
     return json.dumps(obj, ensure_ascii=False, indent=2)
 
 
+def _g(d, k, dflt=""):
+    return (d or {}).get(k, dflt)
+
+
 def build(spec: dict, template: str) -> str:
-    g = lambda d, k, dflt="": (d or {}).get(k, dflt)
+    g = _g
     hero = spec.get("hero") or {}
     outro = spec.get("outro") or {}
     econ = spec.get("economics") or {}
@@ -69,19 +72,16 @@ def build(spec: dict, template: str) -> str:
 
     repl = {
         "{{TITLE}}": g(spec.get("meta"), "title", "Trip Journal"),
-
         "{{HERO_EYEBROW}}": g(hero, "eyebrow"),
         "{{HERO_H1}}": g(hero, "h1"),
         "{{HERO_SUB}}": g(hero, "sub"),
         "{{HERO_REGION}}": g(hero, "region"),
         "{{HERO_PHOTOS_JSON}}": _json_block(hero.get("photos") or []),
         "{{HERO_META}}": _stats(hero.get("meta") or [], 4),
-
         "{{OUTRO_EYEBROW}}": g(outro, "eyebrow"),
         "{{OUTRO_H2}}": g(outro, "h2"),
         "{{OUTRO_P}}": g(outro, "p"),
         "{{OUTRO_STATS}}": _stats(outro.get("stats") or [], 6),
-
         "{{ECON_EYEBROW}}": g(econ, "eyebrow"),
         "{{ECON_H2}}": g(econ, "h2"),
         "{{ECON_INTRO}}": g(econ, "intro"),
@@ -89,18 +89,26 @@ def build(spec: dict, template: str) -> str:
         "{{ECON_BARS}}": _econ_bars(econ.get("bars") or []),
         "{{ECON_NOTES}}": _econ_notes(econ.get("notes") or []),
         "{{ECON_FOOT}}": g(econ, "foot"),
-
-        "{{C_BG0}}": theme["bg0"], "{{C_BG1}}": theme["bg1"], "{{C_BG3}}": theme["bg3"],
-        "{{C_INK}}": theme["ink"], "{{C_INK_DIM}}": theme["ink_dim"], "{{C_MUTED}}": theme["muted"],
-        "{{C_TURQ}}": theme["turquoise"], "{{C_TURQ_DEEP}}": theme["turquoise_deep"],
-        "{{C_SEA}}": theme["sea"], "{{C_SEA_DEEP}}": theme["sea_deep"],
-        "{{C_INK_RGB}}": theme["ink_rgb"], "{{C_TURQ_RGB}}": theme["turquoise_rgb"],
+        "{{C_BG0}}": theme["bg0"],
+        "{{C_BG1}}": theme["bg1"],
+        "{{C_BG3}}": theme["bg3"],
+        "{{C_INK}}": theme["ink"],
+        "{{C_INK_DIM}}": theme["ink_dim"],
+        "{{C_MUTED}}": theme["muted"],
+        "{{C_TURQ}}": theme["turquoise"],
+        "{{C_TURQ_DEEP}}": theme["turquoise_deep"],
+        "{{C_SEA}}": theme["sea"],
+        "{{C_SEA_DEEP}}": theme["sea_deep"],
+        "{{C_INK_RGB}}": theme["ink_rgb"],
+        "{{C_TURQ_RGB}}": theme["turquoise_rgb"],
         "{{C_SEA_RGB}}": theme["sea_rgb"],
-        "{{C_DARK_BG}}": theme["dark_bg"], "{{C_DARK_FG}}": theme["dark_fg"],
-        "{{C_DARK_MUTED}}": theme["dark_muted"], "{{C_DARK_FG_RGB}}": theme["dark_fg_rgb"],
-        "{{C_SIDEBAR_BG}}": theme["sidebar_bg"], "{{C_SIDEBAR_INK}}": theme["sidebar_ink"],
+        "{{C_DARK_BG}}": theme["dark_bg"],
+        "{{C_DARK_FG}}": theme["dark_fg"],
+        "{{C_DARK_MUTED}}": theme["dark_muted"],
+        "{{C_DARK_FG_RGB}}": theme["dark_fg_rgb"],
+        "{{C_SIDEBAR_BG}}": theme["sidebar_bg"],
+        "{{C_SIDEBAR_INK}}": theme["sidebar_ink"],
         "{{C_SIDEBAR_INK_RGB}}": theme["sidebar_ink_rgb"],
-
         "{{LOCATIONS_JSON}}": _json_block(spec.get("locations") or {}),
         "{{PHOTOS_JSON}}": _json_block(spec.get("photos") or {}),
         "{{TIMELINE_JSON}}": _json_block(spec.get("timeline") or []),
@@ -119,14 +127,25 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--spec", default="trip_spec.json")
     ap.add_argument("--template", default="trip_template.html")
-    ap.add_argument("--out", default="azores-trip.html",
-                    help="write here; keep it beside the images/ folder so photo paths resolve")
+    ap.add_argument(
+        "--out",
+        default="azores-trip.html",
+        help="write here; keep it beside the images/ folder so photo paths resolve",
+    )
     args = ap.parse_args()
 
     root = pathlib.Path(__file__).resolve().parent
-    spec_path = (root / args.spec) if not pathlib.Path(args.spec).is_absolute() else pathlib.Path(args.spec)
-    tpl_path = (root / args.template) if not pathlib.Path(args.template).is_absolute() else pathlib.Path(args.template)
-    out_path = (root / args.out) if not pathlib.Path(args.out).is_absolute() else pathlib.Path(args.out)
+    spec_path = (
+        (root / args.spec) if not pathlib.Path(args.spec).is_absolute() else pathlib.Path(args.spec)
+    )
+    tpl_path = (
+        (root / args.template)
+        if not pathlib.Path(args.template).is_absolute()
+        else pathlib.Path(args.template)
+    )
+    out_path = (
+        (root / args.out) if not pathlib.Path(args.out).is_absolute() else pathlib.Path(args.out)
+    )
 
     spec = json.loads(spec_path.read_text(encoding="utf-8"))
     template = tpl_path.read_text(encoding="utf-8")

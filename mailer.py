@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """mailer.py — outbound transactional email via Resend's REST API.
 
-    RESEND_API_KEY unset (e.g. local dev, before signing up for Resend) ->
-    the email is printed to stdout instead of sent, so password-reset (the
-    only feature that needs this) stays testable without a real account.
+RESEND_API_KEY unset (e.g. local dev, before signing up for Resend) ->
+the email is printed to stdout instead of sent, so password-reset (the
+only feature that needs this) stays testable without a real account.
 """
+
 from __future__ import annotations
 
 import requests
@@ -16,8 +17,10 @@ FROM_ADDRESS = "MemoTrip <noreply@memotrip.app>"
 
 def send(to: str, subject: str, html: str) -> None:
     if not config.RESEND_API_KEY:
-        print(f"[mailer] RESEND_API_KEY not set - not sending. Would have emailed {to}:\n"
-              f"  subject: {subject}\n  {html}")
+        print(
+            f"[mailer] RESEND_API_KEY not set - not sending. Would have emailed {to}:\n"
+            f"  subject: {subject}\n  {html}"
+        )
         return
     r = requests.post(
         "https://api.resend.com/emails",

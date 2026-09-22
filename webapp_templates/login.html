@@ -1,165 +1,380 @@
 <!doctype html>
 <html lang="he" dir="rtl">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MemoTrip — התחברות</title>
-<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Secular+One&family=Akaya+Telivigala&family=Assistant:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<style>
-  :root{
-    --pal-0:#5a189a; --pal-2:#9d4edd; --pal-5:#48bfe3; --pal-8:#5aedc9;
-    --bg-0:#F3FBFA; --bg-1:#E1F5F1; --bg-2:#FFFFFF; --bg-3:#E4FBF2;
-    --ink:#123C3D; --ink-dim:#3F6B6C; --muted:#4F7576;
-    --turquoise:#239BC7; --turquoise-deep:#0F687F;
-    --turquoise-bright:#80ffdb; --turquoise-bright-hover:#5aedc9;
-    --line:rgba(18,60,61,0.14);
-    --shadow: 0 20px 50px -22px rgba(18,60,61,0.20);
-    --err:#B4483C; --err-bg:#FBECEA;
-  }
-  *{box-sizing:border-box; margin:0; padding:0;}
-  body{
-    min-height:100vh; color:var(--ink); font-family:'Assistant', sans-serif; line-height:1.6;
-    display:flex; align-items:center; justify-content:center; padding:24px;
-  }
-  h1{ font-family:'Akaya Telivigala', 'Secular One', sans-serif; font-weight:bold; }
-  a{ color:inherit; }
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>MemoTrip — התחברות</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Secular+One&family=Akaya+Telivigala&family=Assistant:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --pal-0: #5a189a;
+        --pal-2: #9d4edd;
+        --pal-5: #48bfe3;
+        --pal-8: #5aedc9;
+        --bg-0: #f3fbfa;
+        --bg-1: #e1f5f1;
+        --bg-2: #ffffff;
+        --bg-3: #e4fbf2;
+        --ink: #123c3d;
+        --ink-dim: #3f6b6c;
+        --muted: #4f7576;
+        --turquoise: #239bc7;
+        --turquoise-deep: #0f687f;
+        --turquoise-bright: #80ffdb;
+        --turquoise-bright-hover: #5aedc9;
+        --line: rgba(18, 60, 61, 0.14);
+        --shadow: 0 20px 50px -22px rgba(18, 60, 61, 0.2);
+        --err: #b4483c;
+        --err-bg: #fbecea;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        min-height: 100vh;
+        color: var(--ink);
+        font-family: "Assistant", sans-serif;
+        line-height: 1.6;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+      }
+      h1 {
+        font-family: "Akaya Telivigala", "Secular One", sans-serif;
+        font-weight: bold;
+      }
+      a {
+        color: inherit;
+      }
 
-  .sky{
-    position:fixed; inset:0; z-index:-1; overflow:hidden; background:var(--bg-0);
-  }
-  .blob{ position:absolute; border-radius:50%; filter:blur(90px); opacity:0.30; will-change:transform; }
-  .blob.b1{ width:520px; height:520px; top:-140px; left:-100px; background:var(--pal-0);
-            animation:drift-a 34s ease-in-out infinite; }
-  .blob.b2{ width:460px; height:460px; bottom:-160px; right:-120px; background:var(--pal-5);
-            animation:drift-b 40s ease-in-out infinite; }
-  .blob.b3{ width:400px; height:400px; bottom:10%; left:15%; background:var(--pal-8);
-            animation:drift-c 46s ease-in-out infinite; }
-  @keyframes drift-a{ 0%,100%{ transform:translate(0,0) scale(1); } 50%{ transform:translate(50px,40px) scale(1.1); } }
-  @keyframes drift-b{ 0%,100%{ transform:translate(0,0) scale(1); } 50%{ transform:translate(-50px,50px) scale(0.94); } }
-  @keyframes drift-c{ 0%,100%{ transform:translate(0,0) scale(1); } 50%{ transform:translate(40px,-46px) scale(1.06); } }
-  @media (prefers-reduced-motion: reduce){ .blob{ animation:none !important; } }
+      .sky {
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        overflow: hidden;
+        background: var(--bg-0);
+      }
+      .blob {
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(90px);
+        opacity: 0.3;
+        will-change: transform;
+      }
+      .blob.b1 {
+        width: 520px;
+        height: 520px;
+        top: -140px;
+        left: -100px;
+        background: var(--pal-0);
+        animation: drift-a 34s ease-in-out infinite;
+      }
+      .blob.b2 {
+        width: 460px;
+        height: 460px;
+        bottom: -160px;
+        right: -120px;
+        background: var(--pal-5);
+        animation: drift-b 40s ease-in-out infinite;
+      }
+      .blob.b3 {
+        width: 400px;
+        height: 400px;
+        bottom: 10%;
+        left: 15%;
+        background: var(--pal-8);
+        animation: drift-c 46s ease-in-out infinite;
+      }
+      @keyframes drift-a {
+        0%,
+        100% {
+          transform: translate(0, 0) scale(1);
+        }
+        50% {
+          transform: translate(50px, 40px) scale(1.1);
+        }
+      }
+      @keyframes drift-b {
+        0%,
+        100% {
+          transform: translate(0, 0) scale(1);
+        }
+        50% {
+          transform: translate(-50px, 50px) scale(0.94);
+        }
+      }
+      @keyframes drift-c {
+        0%,
+        100% {
+          transform: translate(0, 0) scale(1);
+        }
+        50% {
+          transform: translate(40px, -46px) scale(1.06);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .blob {
+          animation: none !important;
+        }
+      }
 
-  /* procedural cloud texture - same recipe as the landing page, see its CSS for notes */
-  .cloud-layer{
-    position:absolute; inset:-16%; width:132%; height:132%;
-    filter:url(#cloud-filter); opacity:1; will-change:transform;
-    animation:cloud-drift 100s linear infinite alternate;
-  }
-  @keyframes cloud-drift{
-    from{ transform:translate(0,0) scale(1); }
-    to{ transform:translate(-4%,-3%) scale(1.07); }
-  }
-  @media (prefers-reduced-motion: reduce){ .cloud-layer{ animation:none; } }
+      /* procedural cloud texture - same recipe as the landing page, see its CSS for notes */
+      .cloud-layer {
+        position: absolute;
+        inset: -16%;
+        width: 132%;
+        height: 132%;
+        filter: url(#cloud-filter);
+        opacity: 1;
+        will-change: transform;
+        animation: cloud-drift 100s linear infinite alternate;
+      }
+      @keyframes cloud-drift {
+        from {
+          transform: translate(0, 0) scale(1);
+        }
+        to {
+          transform: translate(-4%, -3%) scale(1.07);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .cloud-layer {
+          animation: none;
+        }
+      }
 
-  .glass{
-    width:100%; max-width:400px; position:relative;
-    background:rgba(255,255,255,0.62); backdrop-filter:blur(20px) saturate(160%);
-    -webkit-backdrop-filter:blur(20px) saturate(160%);
-    border:1px solid rgba(255,255,255,0.65); border-radius:24px;
-    padding:40px 34px; box-shadow:0 24px 60px -28px rgba(18,60,61,0.28);
-  }
-  @supports not (backdrop-filter: blur(1px)){ .glass{ background:rgba(255,255,255,0.92); } }
+      .glass {
+        width: 100%;
+        max-width: 400px;
+        position: relative;
+        background: rgba(255, 255, 255, 0.62);
+        backdrop-filter: blur(20px) saturate(160%);
+        -webkit-backdrop-filter: blur(20px) saturate(160%);
+        border: 1px solid rgba(255, 255, 255, 0.65);
+        border-radius: 24px;
+        padding: 40px 34px;
+        box-shadow: 0 24px 60px -28px rgba(18, 60, 61, 0.28);
+      }
+      @supports not (backdrop-filter: blur(1px)) {
+        .glass {
+          background: rgba(255, 255, 255, 0.92);
+        }
+      }
 
-  .back{ display:block; font-size:0.82rem; color:var(--muted); margin-bottom:18px; text-decoration:none; }
-  .back:hover{ color:var(--turquoise-deep); }
-  h1{ font-size:1.7rem; margin-bottom:6px; font-style:italic; }
-  h1 em{ color:var(--pal-2); }
-  .sub{ color:var(--ink-dim); font-size:0.92rem; margin-bottom:26px; }
+      .back {
+        display: block;
+        font-size: 0.82rem;
+        color: var(--muted);
+        margin-bottom: 18px;
+        text-decoration: none;
+      }
+      .back:hover {
+        color: var(--turquoise-deep);
+      }
+      h1 {
+        font-size: 1.7rem;
+        margin-bottom: 6px;
+        font-style: italic;
+      }
+      h1 em {
+        color: var(--pal-2);
+      }
+      .sub {
+        color: var(--ink-dim);
+        font-size: 0.92rem;
+        margin-bottom: 26px;
+      }
 
-  .tabs{ display:flex; gap:6px; background:var(--bg-1); border-radius:12px; padding:4px; margin-bottom:24px; }
-  .tabs a{
-    flex:1; text-align:center; padding:9px 0; border-radius:9px; font-size:0.88rem;
-    font-weight:600; color:var(--ink-dim); text-decoration:none;
-  }
-  .tabs a.active{ background:var(--bg-2); color:var(--turquoise-deep); box-shadow:0 4px 10px -6px rgba(18,60,61,0.25); }
+      .tabs {
+        display: flex;
+        gap: 6px;
+        background: var(--bg-1);
+        border-radius: 12px;
+        padding: 4px;
+        margin-bottom: 24px;
+      }
+      .tabs a {
+        flex: 1;
+        text-align: center;
+        padding: 9px 0;
+        border-radius: 9px;
+        font-size: 0.88rem;
+        font-weight: 600;
+        color: var(--ink-dim);
+        text-decoration: none;
+      }
+      .tabs a.active {
+        background: var(--bg-2);
+        color: var(--turquoise-deep);
+        box-shadow: 0 4px 10px -6px rgba(18, 60, 61, 0.25);
+      }
 
-  label{ display:block; font-weight:600; font-size:0.88rem; margin:16px 0 6px; }
-  label:first-of-type{ margin-top:0; }
-  input[type=text], input[type=email], input[type=password]{
-    width:100%; padding:12px 13px; border:1px solid var(--line); border-radius:11px;
-    font:inherit; font-size:0.94rem; color:var(--ink); background:var(--bg-0);
-    box-sizing:border-box; transition:border-color .15s, box-shadow .15s;
-  }
-  input:focus{
-    outline:none; border-color:var(--turquoise); box-shadow:0 0 0 3px rgba(35,155,199,0.18);
-  }
-  .hint-small{ color:var(--muted); font-size:0.76rem; margin-top:5px; }
+      label {
+        display: block;
+        font-weight: 600;
+        font-size: 0.88rem;
+        margin: 16px 0 6px;
+      }
+      label:first-of-type {
+        margin-top: 0;
+      }
+      input[type="text"],
+      input[type="email"],
+      input[type="password"] {
+        width: 100%;
+        padding: 12px 13px;
+        border: 1px solid var(--line);
+        border-radius: 11px;
+        font: inherit;
+        font-size: 0.94rem;
+        color: var(--ink);
+        background: var(--bg-0);
+        box-sizing: border-box;
+        transition:
+          border-color 0.15s,
+          box-shadow 0.15s;
+      }
+      input:focus {
+        outline: none;
+        border-color: var(--turquoise);
+        box-shadow: 0 0 0 3px rgba(35, 155, 199, 0.18);
+      }
+      .hint-small {
+        color: var(--muted);
+        font-size: 0.76rem;
+        margin-top: 5px;
+      }
 
-  button[type=submit]{
-    margin-top:22px; width:100%; background:var(--turquoise-bright); color:var(--ink); border:0;
-    border-radius:11px; padding:13px 20px; font:inherit; font-size:0.96rem; font-weight:700;
-    cursor:pointer; transition:background .15s, transform .1s;
-    box-shadow:0 12px 26px -14px rgba(128,255,219,0.65);
-  }
-  button[type=submit]:hover{ background:var(--turquoise-bright-hover); }
-  button[type=submit]:active{ transform:translateY(1px); }
+      button[type="submit"] {
+        margin-top: 22px;
+        width: 100%;
+        background: var(--turquoise-bright);
+        color: var(--ink);
+        border: 0;
+        border-radius: 11px;
+        padding: 13px 20px;
+        font: inherit;
+        font-size: 0.96rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition:
+          background 0.15s,
+          transform 0.1s;
+        box-shadow: 0 12px 26px -14px rgba(128, 255, 219, 0.65);
+      }
+      button[type="submit"]:hover {
+        background: var(--turquoise-bright-hover);
+      }
+      button[type="submit"]:active {
+        transform: translateY(1px);
+      }
 
-  .err-banner{
-    display:none; background:var(--err-bg); color:var(--err); border-radius:10px;
-    padding:11px 14px; font-size:0.84rem; margin-bottom:16px;
-  }
-  .err-banner.show{ display:block; }
+      .err-banner {
+        display: none;
+        background: var(--err-bg);
+        color: var(--err);
+        border-radius: 10px;
+        padding: 11px 14px;
+        font-size: 0.84rem;
+        margin-bottom: 16px;
+      }
+      .err-banner.show {
+        display: block;
+      }
 
-  .guest{ text-align:center; margin-top:22px; font-size:0.82rem; color:var(--muted); }
-  .guest a{ color:var(--turquoise-deep); font-weight:600; text-decoration:none; }
-  .guest a:hover{ text-decoration:underline; }
-</style>
-</head>
-<body>
-
-  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
-    <defs>
-      <filter id="cloud-filter" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
-        <feTurbulence type="fractalNoise" baseFrequency="0.005 0.009" numOctaves="6" seed="11" stitchTiles="stitch" result="noise"/>
-        <feColorMatrix in="noise" type="luminanceToAlpha" result="alphaFromLum"/>
-        <feComponentTransfer in="alphaFromLum" result="contrast">
-          <feFuncA type="gamma" amplitude="1.8" exponent="2.2" offset="-0.15"/>
-        </feComponentTransfer>
-        <feColorMatrix in="contrast" type="matrix"
-          values="0 0 0 0 1
+      .guest {
+        text-align: center;
+        margin-top: 22px;
+        font-size: 0.82rem;
+        color: var(--muted);
+      }
+      .guest a {
+        color: var(--turquoise-deep);
+        font-weight: 600;
+        text-decoration: none;
+      }
+      .guest a:hover {
+        text-decoration: underline;
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <filter
+          id="cloud-filter"
+          x="-20%"
+          y="-20%"
+          width="140%"
+          height="140%"
+          color-interpolation-filters="sRGB"
+        >
+          <feTurbulence
+            type="fractalNoise"
+            baseFrequency="0.005 0.009"
+            numOctaves="6"
+            seed="11"
+            stitchTiles="stitch"
+            result="noise"
+          />
+          <feColorMatrix in="noise" type="luminanceToAlpha" result="alphaFromLum" />
+          <feComponentTransfer in="alphaFromLum" result="contrast">
+            <feFuncA type="gamma" amplitude="1.8" exponent="2.2" offset="-0.15" />
+          </feComponentTransfer>
+          <feColorMatrix
+            in="contrast"
+            type="matrix"
+            values="0 0 0 0 1
                   0 0 0 0 1
                   0 0 0 0 1
-                  0 0 0 1 0" result="white-clouds"/>
-        <feGaussianBlur in="white-clouds" stdDeviation="0.6"/>
-      </filter>
-    </defs>
-  </svg>
+                  0 0 0 1 0"
+            result="white-clouds"
+          />
+          <feGaussianBlur in="white-clouds" stdDeviation="0.6" />
+        </filter>
+      </defs>
+    </svg>
 
-  <div class="sky" aria-hidden="true">
-    <div class="blob b1"></div>
-    <div class="blob b2"></div>
-    <div class="blob b3"></div>
-    <div class="cloud-layer"></div>
-  </div>
-
-  <div class="glass">
-    <a class="back" href="/">← חזרה</a>
-    <h1>Memo<em>Trip</em></h1>
-    <p class="sub">היכנס לחשבונך כדי לצפות ולשמור את הטיולים שלך.</p>
-
-    <div class="tabs">
-      <a href="/login" class="{{TAB_LOGIN_CLASS}}">התחברות</a>
-      <a href="/login?signup=1" class="{{TAB_SIGNUP_CLASS}}">הרשמה</a>
+    <div class="sky" aria-hidden="true">
+      <div class="blob b1"></div>
+      <div class="blob b2"></div>
+      <div class="blob b3"></div>
+      <div class="cloud-layer"></div>
     </div>
 
-    {{ERROR}}
+    <div class="glass">
+      <a class="back" href="/">← חזרה</a>
+      <h1>Memo<em>Trip</em></h1>
+      <p class="sub">היכנס לחשבונך כדי לצפות ולשמור את הטיולים שלך.</p>
 
-    <form method="post" action="{{FORM_ACTION}}">
-      <label>אימייל</label>
-      <input type="email" name="email" required autocomplete="email">
-      <label>סיסמה</label>
-      <input type="password" name="password" required autocomplete="{{PW_AUTOCOMPLETE}}">
-      {{PW_HINT}}
-      <button type="submit">{{SUBMIT_LABEL}}</button>
-    </form>
-    {{FORGOT_LINK}}
+      <div class="tabs">
+        <a href="/login" class="{{TAB_LOGIN_CLASS}}">התחברות</a>
+        <a href="/login?signup=1" class="{{TAB_SIGNUP_CLASS}}">הרשמה</a>
+      </div>
 
-    <p class="guest"><a href="/">בשימוש כאורח</a> - הטיול לא יישמר לחשבון.</p>
-    <p class="guest"><a href="/privacy">מדיניות פרטיות</a> · <a href="/terms">תנאי שימוש</a></p>
-  </div>
+      {{ERROR}}
 
-</body>
+      <form method="post" action="{{FORM_ACTION}}">
+        <label>אימייל</label>
+        <input type="email" name="email" required autocomplete="email" />
+        <label>סיסמה</label>
+        <input type="password" name="password" required autocomplete="{{PW_AUTOCOMPLETE}}" />
+        {{PW_HINT}}
+        <button type="submit">{{SUBMIT_LABEL}}</button>
+      </form>
+      {{FORGOT_LINK}}
+
+      <p class="guest"><a href="/">בשימוש כאורח</a> - הטיול לא יישמר לחשבון.</p>
+      <p class="guest"><a href="/privacy">מדיניות פרטיות</a> · <a href="/terms">תנאי שימוש</a></p>
+    </div>
+  </body>
 </html>

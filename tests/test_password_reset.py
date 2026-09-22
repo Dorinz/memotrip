@@ -5,6 +5,7 @@ the exact link MemoTrip would email a user, without a network call or a real
 inbox, the same way mailer.py itself falls back to logging when
 RESEND_API_KEY is unset (see mailer.py).
 """
+
 from __future__ import annotations
 
 import re
@@ -13,6 +14,7 @@ import urllib.parse
 
 def _capture_reset_link(monkeypatch) -> dict:
     import mailer
+
     sent: dict = {}
 
     def fake_send(to, subject, html):
@@ -30,7 +32,9 @@ def _extract_token(html: str) -> str:
 
 
 def test_forgot_password_unknown_email_gives_generic_response(client):
-    r = client.post("/forgot-password", data={"email": "nobody@example.com"}, follow_redirects=False)
+    r = client.post(
+        "/forgot-password", data={"email": "nobody@example.com"}, follow_redirects=False
+    )
     assert r.status_code == 303
     assert r.headers["location"] == "/forgot-password?sent=1"
 
@@ -45,15 +49,21 @@ def test_full_password_reset_flow(client, signup, monkeypatch):
     token = _extract_token(sent["html"])
 
     new_password = "newpassword123"
-    r = client.post("/reset-password", data={"token": token, "password": new_password}, follow_redirects=False)
+    r = client.post(
+        "/reset-password", data={"token": token, "password": new_password}, follow_redirects=False
+    )
     assert r.headers["location"] == "/"
 
     client.post("/logout")
 
-    r = client.post("/login", data={"email": email, "password": old_password}, follow_redirects=False)
+    r = client.post(
+        "/login", data={"email": email, "password": old_password}, follow_redirects=False
+    )
     assert "error=" in r.headers["location"]
 
-    r = client.post("/login", data={"email": email, "password": new_password}, follow_redirects=False)
+    r = client.post(
+        "/login", data={"email": email, "password": new_password}, follow_redirects=False
+    )
     assert r.headers["location"] == "/"
 
 
@@ -63,10 +73,16 @@ def test_reset_token_cannot_be_reused(client, signup, monkeypatch):
     client.post("/forgot-password", data={"email": email})
     token = _extract_token(sent["html"])
 
-    r = client.post("/reset-password", data={"token": token, "password": "firstnewpass"}, follow_redirects=False)
+    r = client.post(
+        "/reset-password", data={"token": token, "password": "firstnewpass"}, follow_redirects=False
+    )
     assert r.headers["location"] == "/"
 
-    r = client.post("/reset-password", data={"token": token, "password": "secondnewpass"}, follow_redirects=False)
+    r = client.post(
+        "/reset-password",
+        data={"token": token, "password": "secondnewpass"},
+        follow_redirects=False,
+    )
     assert r.headers["location"] == "/forgot-password"
 
 
@@ -76,7 +92,9 @@ def test_reset_password_rejects_bad_length(client, signup, monkeypatch):
     client.post("/forgot-password", data={"email": email})
     token = _extract_token(sent["html"])
 
-    r = client.post("/reset-password", data={"token": token, "password": "abc"}, follow_redirects=False)
+    r = client.post(
+        "/reset-password", data={"token": token, "password": "abc"}, follow_redirects=False
+    )
     assert "error=" in r.headers["location"]
 
 

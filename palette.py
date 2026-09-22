@@ -13,27 +13,29 @@ Pure color theory - no external service, no network call.
 Each trip gets ONE palette, generated once and stored in trip_spec.json's
 `theme` block, so rebuilds (e.g. after adding photos) don't shift the colors.
 """
+
 from __future__ import annotations
 
 import colorsys
 import random
 
 
-def _hex(h: float, s: float, l: float) -> str:
+def _hex(h: float, s: float, lightness: float) -> str:
     h = (h % 360) / 360.0
-    r, g, b = colorsys.hls_to_rgb(h, max(0.0, min(1.0, l)), max(0.0, min(1.0, s)))
+    r, g, b = colorsys.hls_to_rgb(h, max(0.0, min(1.0, lightness)), max(0.0, min(1.0, s)))
     return "#{:02X}{:02X}{:02X}".format(round(r * 255), round(g * 255), round(b * 255))
 
 
 def _rgb(hexcolor: str) -> tuple[int, int, int]:
     hexcolor = hexcolor.lstrip("#")
-    return tuple(int(hexcolor[i:i + 2], 16) for i in (0, 2, 4))
+    return tuple(int(hexcolor[i : i + 2], 16) for i in (0, 2, 4))
 
 
 def _luminance(hexcolor: str) -> float:
     def lin(c):
         c /= 255.0
         return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+
     r, g, b = _rgb(hexcolor)
     return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
 
@@ -44,13 +46,13 @@ def _contrast(a: str, b: str) -> float:
     return (la + 0.05) / (lb + 0.05)
 
 
-def _darken_until(h: float, s: float, l: float, bg: str, min_ratio: float) -> str:
+def _darken_until(h: float, s: float, lightness: float, bg: str, min_ratio: float) -> str:
     """Step lightness down until the color contrasts >= min_ratio against bg (or bottoms out)."""
-    hexcolor = _hex(h, s, l)
+    hexcolor = _hex(h, s, lightness)
     steps = 0
-    while _contrast(hexcolor, bg) < min_ratio and l > 0.06 and steps < 40:
-        l -= 0.02
-        hexcolor = _hex(h, s, l)
+    while _contrast(hexcolor, bg) < min_ratio and lightness > 0.06 and steps < 40:
+        lightness -= 0.02
+        hexcolor = _hex(h, s, lightness)
         steps += 1
     return hexcolor
 
@@ -94,10 +96,10 @@ def generate_palette(seed=None) -> dict:
     # _darken_until only steps lightness down; dark_fg needs to stay light against a
     # dark bg, so contrast-check by lightening instead if the initial pick falls short
     if _contrast(dark_fg, dark_bg) < 8.0:
-        l = 0.94
-        while _contrast(dark_fg, dark_bg) < 8.0 and l < 0.99:
-            l += 0.01
-            dark_fg = _hex(ink_hue, rnd.uniform(0.25, 0.40), l)
+        lightness = 0.94
+        while _contrast(dark_fg, dark_bg) < 8.0 and lightness < 0.99:
+            lightness += 0.01
+            dark_fg = _hex(ink_hue, rnd.uniform(0.25, 0.40), lightness)
     dark_muted = _hex(ink_hue, rnd.uniform(0.18, 0.28), rnd.uniform(0.62, 0.70))
 
     # a bold, saturated block (not a subtle paper tint) for a high-contrast,
@@ -108,12 +110,22 @@ def generate_palette(seed=None) -> dict:
     sidebar_ink = _darken_until(ink_hue, rnd.uniform(0.70, 0.92), 0.30, sidebar_bg, 4.5)
 
     return {
-        "bg0": bg0, "bg1": bg1, "bg2": bg2, "bg3": bg3,
-        "ink": ink, "ink_dim": ink_dim, "muted": muted,
-        "turquoise": turquoise, "turquoise_deep": turquoise_deep,
-        "sea": sea, "sea_deep": sea_deep,
-        "dark_bg": dark_bg, "dark_fg": dark_fg, "dark_muted": dark_muted,
-        "sidebar_bg": sidebar_bg, "sidebar_ink": sidebar_ink,
+        "bg0": bg0,
+        "bg1": bg1,
+        "bg2": bg2,
+        "bg3": bg3,
+        "ink": ink,
+        "ink_dim": ink_dim,
+        "muted": muted,
+        "turquoise": turquoise,
+        "turquoise_deep": turquoise_deep,
+        "sea": sea,
+        "sea_deep": sea_deep,
+        "dark_bg": dark_bg,
+        "dark_fg": dark_fg,
+        "dark_muted": dark_muted,
+        "sidebar_bg": sidebar_bg,
+        "sidebar_ink": sidebar_ink,
         "ink_rgb": "%d,%d,%d" % _rgb(ink),
         "turquoise_rgb": "%d,%d,%d" % _rgb(turquoise),
         "sea_rgb": "%d,%d,%d" % _rgb(sea),
@@ -125,19 +137,33 @@ def generate_palette(seed=None) -> dict:
 # the Azores reference page's original hand-tuned palette — used whenever a spec
 # has no `theme` block, so that build stays byte-identical to the hand-built page
 DEFAULT = {
-    "bg0": "#FBF9F4", "bg1": "#F0F7F6", "bg2": "#FFFFFF", "bg3": "#E3F1EF",
-    "ink": "#163B3F", "ink_dim": "#4C6A6D", "muted": "#52696B",
-    "turquoise": "#1EACA0", "turquoise_deep": "#0E8478",
-    "sea": "#3C7DA6", "sea_deep": "#275A7D",
-    "dark_bg": "#132A38", "dark_fg": "#DCEFF0", "dark_muted": "#7FAEB8",
-    "sidebar_bg": "#C1F0EF", "sidebar_ink": "#0F578A",
-    "ink_rgb": "22,59,63", "turquoise_rgb": "30,172,160", "sea_rgb": "60,125,166",
-    "dark_fg_rgb": "220,239,240", "sidebar_ink_rgb": "15,87,138",
+    "bg0": "#FBF9F4",
+    "bg1": "#F0F7F6",
+    "bg2": "#FFFFFF",
+    "bg3": "#E3F1EF",
+    "ink": "#163B3F",
+    "ink_dim": "#4C6A6D",
+    "muted": "#52696B",
+    "turquoise": "#1EACA0",
+    "turquoise_deep": "#0E8478",
+    "sea": "#3C7DA6",
+    "sea_deep": "#275A7D",
+    "dark_bg": "#132A38",
+    "dark_fg": "#DCEFF0",
+    "dark_muted": "#7FAEB8",
+    "sidebar_bg": "#C1F0EF",
+    "sidebar_ink": "#0F578A",
+    "ink_rgb": "22,59,63",
+    "turquoise_rgb": "30,172,160",
+    "sea_rgb": "60,125,166",
+    "dark_fg_rgb": "220,239,240",
+    "sidebar_ink_rgb": "15,87,138",
 }
 
 
 if __name__ == "__main__":
     import sys
+
     p = generate_palette(sys.argv[1] if len(sys.argv) > 1 else None)
     for k, v in p.items():
         print(f"{k:16} {v}")

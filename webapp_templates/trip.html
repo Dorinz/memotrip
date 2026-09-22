@@ -1,313 +1,599 @@
 <!doctype html>
 <html lang="he" dir="rtl">
-<head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MemoTrip — {{TID8}}</title>
-<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Secular+One&family=Assistant:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<style>
-  :root{
-    --pal-0:#5a189a; --pal-1:#7b2cbf; --pal-2:#9d4edd; --pal-3:#c77dff; --pal-4:#e0aaff;
-    --pal-5:#48bfe3; --pal-6:#56cfe1; --pal-7:#64dfdf; --pal-8:#5aedc9; --pal-9:#80ffdb;
-    --bg-0:#F3FBFA; --bg-1:#E1F5F1; --bg-2:#FFFFFF; --bg-3:#E4FBF2;
-    --ink:#123C3D; --ink-dim:#3F6B6C; --muted:#4F7576;
-    --turquoise:#239BC7; --turquoise-deep:#0F687F;
-    --turquoise-bright:#80ffdb; --turquoise-bright-hover:#5aedc9;
-    --line:rgba(18,60,61,0.14);
-    --shadow: 0 20px 50px -22px rgba(18,60,61,0.20);
-    --err:#B4483C; --err-bg:#FBECEA;
-  }
-  *{box-sizing:border-box;}
-  body{
-    font-family:'Assistant', sans-serif; max-width:720px; margin:0 auto; padding:80px 20px 60px;
-    color:var(--ink); line-height:1.6;
-  }
-  a{ color:var(--turquoise-deep); }
-  .mono{ font-family:'IBM Plex Mono', monospace; direction:ltr; unicode-bidi:embed; }
-  h1,.display{ font-family:'Secular One', sans-serif; font-weight:400; }
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>MemoTrip — {{TID8}}</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Secular+One&family=Assistant:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --pal-0: #5a189a;
+        --pal-1: #7b2cbf;
+        --pal-2: #9d4edd;
+        --pal-3: #c77dff;
+        --pal-4: #e0aaff;
+        --pal-5: #48bfe3;
+        --pal-6: #56cfe1;
+        --pal-7: #64dfdf;
+        --pal-8: #5aedc9;
+        --pal-9: #80ffdb;
+        --bg-0: #f3fbfa;
+        --bg-1: #e1f5f1;
+        --bg-2: #ffffff;
+        --bg-3: #e4fbf2;
+        --ink: #123c3d;
+        --ink-dim: #3f6b6c;
+        --muted: #4f7576;
+        --turquoise: #239bc7;
+        --turquoise-deep: #0f687f;
+        --turquoise-bright: #80ffdb;
+        --turquoise-bright-hover: #5aedc9;
+        --line: rgba(18, 60, 61, 0.14);
+        --shadow: 0 20px 50px -22px rgba(18, 60, 61, 0.2);
+        --err: #b4483c;
+        --err-bg: #fbecea;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        font-family: "Assistant", sans-serif;
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 80px 20px 60px;
+        color: var(--ink);
+        line-height: 1.6;
+      }
+      a {
+        color: var(--turquoise-deep);
+      }
+      .mono {
+        font-family: "IBM Plex Mono", monospace;
+        direction: ltr;
+        unicode-bidi: embed;
+      }
+      h1,
+      .display {
+        font-family: "Secular One", sans-serif;
+        font-weight: 400;
+      }
 
-  /* ---------- background: sky + blobs + procedural clouds (matches the landing page) ---------- */
-  .sky{ position:fixed; inset:0; z-index:-1; overflow:hidden; background:var(--bg-0); }
-  .blob{ position:absolute; border-radius:50%; filter:blur(90px); opacity:0.32; will-change:transform; }
-  .blob.b1{ width:640px; height:640px; top:-160px; left:-120px; background:var(--pal-0);
-            animation:drift-a 34s ease-in-out infinite; }
-  .blob.b2{ width:580px; height:580px; top:8%; right:-160px; background:var(--pal-5);
-            animation:drift-b 40s ease-in-out infinite; }
-  .blob.b3{ width:540px; height:540px; bottom:-180px; left:18%; background:var(--pal-8);
-            animation:drift-c 46s ease-in-out infinite; }
-  .blob.b4{ width:480px; height:480px; bottom:6%; right:8%; background:var(--pal-2);
-            animation:drift-a 38s ease-in-out infinite reverse; }
-  @keyframes drift-a{ 0%,100%{ transform:translate(0,0) scale(1); } 50%{ transform:translate(60px,44px) scale(1.12); } }
-  @keyframes drift-b{ 0%,100%{ transform:translate(0,0) scale(1); } 50%{ transform:translate(-56px,60px) scale(0.94); } }
-  @keyframes drift-c{ 0%,100%{ transform:translate(0,0) scale(1); } 50%{ transform:translate(46px,-56px) scale(1.06); } }
-  @media (prefers-reduced-motion: reduce){ .blob, .cloud-layer{ animation:none !important; } }
+      /* ---------- background: sky + blobs + procedural clouds (matches the landing page) ---------- */
+      .sky {
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        overflow: hidden;
+        background: var(--bg-0);
+      }
+      .blob {
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(90px);
+        opacity: 0.32;
+        will-change: transform;
+      }
+      .blob.b1 {
+        width: 640px;
+        height: 640px;
+        top: -160px;
+        left: -120px;
+        background: var(--pal-0);
+        animation: drift-a 34s ease-in-out infinite;
+      }
+      .blob.b2 {
+        width: 580px;
+        height: 580px;
+        top: 8%;
+        right: -160px;
+        background: var(--pal-5);
+        animation: drift-b 40s ease-in-out infinite;
+      }
+      .blob.b3 {
+        width: 540px;
+        height: 540px;
+        bottom: -180px;
+        left: 18%;
+        background: var(--pal-8);
+        animation: drift-c 46s ease-in-out infinite;
+      }
+      .blob.b4 {
+        width: 480px;
+        height: 480px;
+        bottom: 6%;
+        right: 8%;
+        background: var(--pal-2);
+        animation: drift-a 38s ease-in-out infinite reverse;
+      }
+      @keyframes drift-a {
+        0%,
+        100% {
+          transform: translate(0, 0) scale(1);
+        }
+        50% {
+          transform: translate(60px, 44px) scale(1.12);
+        }
+      }
+      @keyframes drift-b {
+        0%,
+        100% {
+          transform: translate(0, 0) scale(1);
+        }
+        50% {
+          transform: translate(-56px, 60px) scale(0.94);
+        }
+      }
+      @keyframes drift-c {
+        0%,
+        100% {
+          transform: translate(0, 0) scale(1);
+        }
+        50% {
+          transform: translate(46px, -56px) scale(1.06);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .blob,
+        .cloud-layer {
+          animation: none !important;
+        }
+      }
 
-  .cloud-layer{
-    position:absolute; inset:-16%; width:132%; height:132%;
-    filter:url(#cloud-filter); opacity:1; will-change:transform;
-    animation:cloud-drift 100s linear infinite alternate;
-  }
-  @keyframes cloud-drift{ from{ transform:translate(0,0) scale(1); } to{ transform:translate(-4%,-3%) scale(1.07); } }
+      .cloud-layer {
+        position: absolute;
+        inset: -16%;
+        width: 132%;
+        height: 132%;
+        filter: url(#cloud-filter);
+        opacity: 1;
+        will-change: transform;
+        animation: cloud-drift 100s linear infinite alternate;
+      }
+      @keyframes cloud-drift {
+        from {
+          transform: translate(0, 0) scale(1);
+        }
+        to {
+          transform: translate(-4%, -3%) scale(1.07);
+        }
+      }
 
-  /* ---------- page chrome ---------- */
-  .back{ display:inline-block; font-size:0.86rem; color:var(--muted); text-decoration:none; margin-bottom:22px; }
-  .back:hover{ color:var(--turquoise-deep); }
+      /* ---------- page chrome ---------- */
+      .back {
+        display: inline-block;
+        font-size: 0.86rem;
+        color: var(--muted);
+        text-decoration: none;
+        margin-bottom: 22px;
+      }
+      .back:hover {
+        color: var(--turquoise-deep);
+      }
 
-  .card{
-    background:var(--bg-2); border-radius:20px; box-shadow:var(--shadow);
-    border:1px solid var(--line); padding:32px 30px;
-  }
-  .stage{ font-family:'Secular One',sans-serif; font-size:1.3rem; margin-bottom:14px; }
-  .bar{ height:8px; background:var(--bg-1); border-radius:99px; overflow:hidden; margin-bottom:18px; }
-  .bar>i{
-    display:block; height:100%; width:10%; transition:width .4s;
-    background:linear-gradient(90deg, var(--pal-2), var(--turquoise-bright));
-  }
-  .err-banner{
-    background:var(--err-bg); border:0; color:var(--err); padding:12px 14px; border-radius:10px;
-    white-space:pre-wrap; direction:ltr; text-align:left; font-size:0.82rem; margin-top:14px;
-  }
+      .card {
+        background: var(--bg-2);
+        border-radius: 20px;
+        box-shadow: var(--shadow);
+        border: 1px solid var(--line);
+        padding: 32px 30px;
+      }
+      .stage {
+        font-family: "Secular One", sans-serif;
+        font-size: 1.3rem;
+        margin-bottom: 14px;
+      }
+      .bar {
+        height: 8px;
+        background: var(--bg-1);
+        border-radius: 99px;
+        overflow: hidden;
+        margin-bottom: 18px;
+      }
+      .bar > i {
+        display: block;
+        height: 100%;
+        width: 10%;
+        transition: width 0.4s;
+        background: linear-gradient(90deg, var(--pal-2), var(--turquoise-bright));
+      }
+      .err-banner {
+        background: var(--err-bg);
+        border: 0;
+        color: var(--err);
+        padding: 12px 14px;
+        border-radius: 10px;
+        white-space: pre-wrap;
+        direction: ltr;
+        text-align: left;
+        font-size: 0.82rem;
+        margin-top: 14px;
+      }
 
-  .row{
-    display:flex; gap:8px; flex-wrap:nowrap; margin-top:22px;
-    overflow-x:auto; -ms-overflow-style:none; scrollbar-width:none; padding-bottom:2px;
-  }
-  .row::-webkit-scrollbar{ display:none; }
-  .row form{ flex:none; }
-  .btn, button{
-    font:inherit; font-size:0.84rem; font-weight:700; border-radius:11px; padding:10px 14px;
-    cursor:pointer; text-decoration:none; display:inline-block; border:0; white-space:nowrap; flex:none;
-    background:var(--turquoise-bright); color:var(--ink);
-    transition:background .15s, transform .1s;
-  }
-  .btn:hover, button:hover{ background:var(--turquoise-bright-hover); }
-  .btn:active, button:active{ transform:translateY(1px); }
-  .btn.ghost, button.ghost{
-    background:var(--bg-1); color:var(--turquoise-deep); border:1px solid var(--line);
-  }
-  .btn.ghost:hover, button.ghost:hover{ background:var(--bg-3); border-color:var(--turquoise); }
-  button:disabled{ opacity:0.6; cursor:default; }
+      .row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: nowrap;
+        margin-top: 22px;
+        overflow-x: auto;
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+        padding-bottom: 2px;
+      }
+      .row::-webkit-scrollbar {
+        display: none;
+      }
+      .row form {
+        flex: none;
+      }
+      .btn,
+      button {
+        font: inherit;
+        font-size: 0.84rem;
+        font-weight: 700;
+        border-radius: 11px;
+        padding: 10px 14px;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-block;
+        border: 0;
+        white-space: nowrap;
+        flex: none;
+        background: var(--turquoise-bright);
+        color: var(--ink);
+        transition:
+          background 0.15s,
+          transform 0.1s;
+      }
+      .btn:hover,
+      button:hover {
+        background: var(--turquoise-bright-hover);
+      }
+      .btn:active,
+      button:active {
+        transform: translateY(1px);
+      }
+      .btn.ghost,
+      button.ghost {
+        background: var(--bg-1);
+        color: var(--turquoise-deep);
+        border: 1px solid var(--line);
+      }
+      .btn.ghost:hover,
+      button.ghost:hover {
+        background: var(--bg-3);
+        border-color: var(--turquoise);
+      }
+      button:disabled {
+        opacity: 0.6;
+        cursor: default;
+      }
 
-  /* ---------- the photo-picker steps, in a real modal instead of expanding
+      /* ---------- the photo-picker steps, in a real modal instead of expanding
      inline right under the existing action row ---------- */
-  .modal-overlay{
-    position:fixed; inset:0; background:rgba(18,60,61,0.35); backdrop-filter:blur(2px);
-    display:flex; align-items:center; justify-content:center; z-index:50; padding:20px;
-  }
-  .modal-overlay[hidden]{ display:none; }
-  .modal-box{
-    position:relative; background:var(--bg-2); border-radius:18px; box-shadow:var(--shadow);
-    padding:28px 26px; max-width:380px; width:100%; text-align:center;
-  }
-  .modal-box p{ margin-bottom:10px; color:var(--ink-dim); font-size:0.92rem; text-align:right; }
-  .modal-close{
-    position:absolute; top:12px; left:12px; background:none; border:0; font-size:1.1rem;
-    color:var(--muted); cursor:pointer; padding:6px; line-height:1;
-  }
-  .modal-close:hover{ background:none; color:var(--turquoise-deep); }
+      .modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(18, 60, 61, 0.35);
+        backdrop-filter: blur(2px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 50;
+        padding: 20px;
+      }
+      .modal-overlay[hidden] {
+        display: none;
+      }
+      .modal-box {
+        position: relative;
+        background: var(--bg-2);
+        border-radius: 18px;
+        box-shadow: var(--shadow);
+        padding: 28px 26px;
+        max-width: 380px;
+        width: 100%;
+        text-align: center;
+      }
+      .modal-box p {
+        margin-bottom: 10px;
+        color: var(--ink-dim);
+        font-size: 0.92rem;
+        text-align: right;
+      }
+      .modal-close {
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        background: none;
+        border: 0;
+        font-size: 1.1rem;
+        color: var(--muted);
+        cursor: pointer;
+        padding: 6px;
+        line-height: 1;
+      }
+      .modal-close:hover {
+        background: none;
+        color: var(--turquoise-deep);
+      }
 
-  /* the real page has a fixed-width sidebar that only sits beside the content
+      /* the real page has a fixed-width sidebar that only sits beside the content
      above ~860px wide (see trip_template.html) - a naive 100%-width iframe in
      this narrow card would always render the mobile "sidebar on top" layout,
      which isn't what visitors will actually see on a real screen. Instead the
      iframe renders at a real desktop width, then the whole thing is scaled
      down (JS computes the ratio from the wrapper's real width) to fit here -
      an accurate shrunk desktop screenshot, not a mobile view. */
-  .preview-wrap{
-    position:relative; width:100%; height:70vh; overflow:hidden;
-    border:1px solid var(--line); border-radius:14px;
-    margin-top:20px; background:var(--bg-2); box-shadow:var(--shadow);
-  }
-  #preview{
-    position:absolute; top:0; left:0; transform-origin:0 0; border:0;
-  }
-</style>
-</head>
-<body>
-
-  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
-    <defs>
-      <filter id="cloud-filter" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
-        <feTurbulence type="fractalNoise" baseFrequency="0.005 0.009" numOctaves="6" seed="11" stitchTiles="stitch" result="noise"/>
-        <feColorMatrix in="noise" type="luminanceToAlpha" result="alphaFromLum"/>
-        <feComponentTransfer in="alphaFromLum" result="contrast">
-          <feFuncA type="gamma" amplitude="1.8" exponent="2.2" offset="-0.15"/>
-        </feComponentTransfer>
-        <feColorMatrix in="contrast" type="matrix"
-          values="0 0 0 0 1
+      .preview-wrap {
+        position: relative;
+        width: 100%;
+        height: 70vh;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        margin-top: 20px;
+        background: var(--bg-2);
+        box-shadow: var(--shadow);
+      }
+      #preview {
+        position: absolute;
+        top: 0;
+        left: 0;
+        transform-origin: 0 0;
+        border: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <filter
+          id="cloud-filter"
+          x="-20%"
+          y="-20%"
+          width="140%"
+          height="140%"
+          color-interpolation-filters="sRGB"
+        >
+          <feTurbulence
+            type="fractalNoise"
+            baseFrequency="0.005 0.009"
+            numOctaves="6"
+            seed="11"
+            stitchTiles="stitch"
+            result="noise"
+          />
+          <feColorMatrix in="noise" type="luminanceToAlpha" result="alphaFromLum" />
+          <feComponentTransfer in="alphaFromLum" result="contrast">
+            <feFuncA type="gamma" amplitude="1.8" exponent="2.2" offset="-0.15" />
+          </feComponentTransfer>
+          <feColorMatrix
+            in="contrast"
+            type="matrix"
+            values="0 0 0 0 1
                   0 0 0 0 1
                   0 0 0 0 1
-                  0 0 0 1 0" result="white-clouds"/>
-        <feGaussianBlur in="white-clouds" stdDeviation="0.6"/>
-      </filter>
-    </defs>
-  </svg>
+                  0 0 0 1 0"
+            result="white-clouds"
+          />
+          <feGaussianBlur in="white-clouds" stdDeviation="0.6" />
+        </filter>
+      </defs>
+    </svg>
 
-  <div class="sky" aria-hidden="true">
-    <div class="blob b1"></div>
-    <div class="blob b2"></div>
-    <div class="blob b3"></div>
-    <div class="blob b4"></div>
-    <div class="cloud-layer"></div>
-  </div>
-
-  <a class="back" href="/">← טיול חדש</a>
-
-  <div class="card">
-    <div class="stage" id="stage">…</div>
-    <div class="bar"><i id="fill"></i></div>
-    <div class="err-banner" id="err" title="אזהרות" style="display:none"></div>
-
-    <div class="row" id="errorActions" style="display:none">
-      <form method="post" action="/trips/{{TID}}/rerun" style="display:inline"><button class="btn">נסה שוב</button></form>
+    <div class="sky" aria-hidden="true">
+      <div class="blob b1"></div>
+      <div class="blob b2"></div>
+      <div class="blob b3"></div>
+      <div class="blob b4"></div>
+      <div class="cloud-layer"></div>
     </div>
 
-    <div class="row" id="ready" style="display:none">
-      <a class="btn" id="open" target="_blank">פתח בכרטיסייה חדשה</a>
-      <a class="btn ghost" id="dl" download="trip.html">הורדה</a>
-      <button class="ghost" id="addphotos">הוספת תמונות</button>
-      <button class="ghost" id="reroll">עיצוב מחדש</button>
-      <form method="post" action="/trips/{{TID}}/rerun" style="display:inline"><button class="ghost">הרץ מחדש</button></form>
+    <a class="back" href="/">← טיול חדש</a>
+
+    <div class="card">
+      <div class="stage" id="stage">…</div>
+      <div class="bar"><i id="fill"></i></div>
+      <div class="err-banner" id="err" title="אזהרות" style="display: none"></div>
+
+      <div class="row" id="errorActions" style="display: none">
+        <form method="post" action="/trips/{{TID}}/rerun" style="display: inline">
+          <button class="btn">נסה שוב</button>
+        </form>
+      </div>
+
+      <div class="row" id="ready" style="display: none">
+        <a class="btn" id="open" target="_blank">פתח בכרטיסייה חדשה</a>
+        <a class="btn ghost" id="dl" download="trip.html">הורדה</a>
+        <button class="ghost" id="addphotos">הוספת תמונות</button>
+        <button class="ghost" id="reroll">עיצוב מחדש</button>
+        <form method="post" action="/trips/{{TID}}/rerun" style="display: inline">
+          <button class="ghost">הרץ מחדש</button>
+        </form>
+      </div>
     </div>
 
-  </div>
-
-  <div class="modal-overlay" id="pickModal" hidden>
-    <div class="modal-box">
-      <button type="button" class="modal-close" id="pickModalClose" aria-label="סגירה">✕</button>
-      <p>1. פותחים את בורר Google, בוחרים תמונות, לוחצים <b>Done</b>:</p>
-      <a class="btn" id="pickerlink" target="_blank">פתח את הבורר</a>
-      <p style="margin-top:14px">2. חוזרים לכאן ולוחצים:</p>
-      <button class="btn" id="donepick">סיימתי לבחור</button>
+    <div class="modal-overlay" id="pickModal" hidden>
+      <div class="modal-box">
+        <button type="button" class="modal-close" id="pickModalClose" aria-label="סגירה">✕</button>
+        <p>1. פותחים את בורר Google, בוחרים תמונות, לוחצים <b>Done</b>:</p>
+        <a class="btn" id="pickerlink" target="_blank">פתח את הבורר</a>
+        <p style="margin-top: 14px">2. חוזרים לכאן ולוחצים:</p>
+        <button class="btn" id="donepick">סיימתי לבחור</button>
+      </div>
     </div>
-  </div>
 
-  <div class="preview-wrap" id="previewWrap" style="display:none">
-    <iframe id="preview"></iframe>
-  </div>
+    <div class="preview-wrap" id="previewWrap" style="display: none">
+      <iframe id="preview"></iframe>
+    </div>
 
-<script>
-const TID = "{{TID}}";
-const $ = id => document.getElementById(id);
+    <script>
+      const TID = "{{TID}}";
+      const $ = (id) => document.getElementById(id);
 
-// render the preview at a real desktop width, then scale the whole iframe
-// down to fit the wrapper - so the page's fixed-width sidebar sits beside the
-// content the way it really does on a real screen, not stacked on top.
-const PREVIEW_W = 1200;   // comfortably clears trip_template.html's 860px sidebar breakpoint
-function sizePreview(){
-  const wrap = $("previewWrap"), frame = $("preview");
-  if(wrap.style.display === "none") return;
-  const scale = wrap.clientWidth / PREVIEW_W;
-  frame.style.width = PREVIEW_W + "px";
-  frame.style.height = (wrap.clientHeight / scale) + "px";
-  frame.style.transform = `scale(${scale})`;
-}
-window.addEventListener('resize', sizePreview);
+      // render the preview at a real desktop width, then scale the whole iframe
+      // down to fit the wrapper - so the page's fixed-width sidebar sits beside the
+      // content the way it really does on a real screen, not stacked on top.
+      const PREVIEW_W = 1200; // comfortably clears trip_template.html's 860px sidebar breakpoint
+      function sizePreview() {
+        const wrap = $("previewWrap"),
+          frame = $("preview");
+        if (wrap.style.display === "none") return;
+        const scale = wrap.clientWidth / PREVIEW_W;
+        frame.style.width = PREVIEW_W + "px";
+        frame.style.height = wrap.clientHeight / scale + "px";
+        frame.style.transform = `scale(${scale})`;
+      }
+      window.addEventListener("resize", sizePreview);
 
-async function poll(){
-  const r = await fetch(`/trips/${TID}/status`);
-  const s = await r.json();
-  $("stage").textContent = s.stage || s.status || "";
-  const steps = ["קורא את המסמכים","מנתח את המסלול","שולף מיקומים ומפות",
-                 "כותב את סיפור המסע","בוחר את התמונות הכי טובות","בונה את דף המסע",
-                 "ממתין לבחירת התמונות","מוריד את התמונות","הושלם"];
-  let i = steps.findIndex(x => (s.stage||"").startsWith(x));
-  $("fill").style.width = (s.status==="ready" ? 100 : Math.max(10,(i+1)/steps.length*100)) + "%";
+      async function poll() {
+        const r = await fetch(`/trips/${TID}/status`);
+        const s = await r.json();
+        $("stage").textContent = s.stage || s.status || "";
+        const steps = [
+          "קורא את המסמכים",
+          "מנתח את המסלול",
+          "שולף מיקומים ומפות",
+          "כותב את סיפור המסע",
+          "בוחר את התמונות הכי טובות",
+          "בונה את דף המסע",
+          "ממתין לבחירת התמונות",
+          "מוריד את התמונות",
+          "הושלם",
+        ];
+        let i = steps.findIndex((x) => (s.stage || "").startsWith(x));
+        $("fill").style.width =
+          (s.status === "ready" ? 100 : Math.max(10, ((i + 1) / steps.length) * 100)) + "%";
 
-  if(s.error){ $("err").style.display="block"; $("err").textContent = s.error; }
-  else $("err").style.display="none";
+        if (s.error) {
+          $("err").style.display = "block";
+          $("err").textContent = s.error;
+        } else $("err").style.display = "none";
 
-  if(s.status === "ready"){
-    $("stage").textContent = "הדף מוכן ✓";
-    $("ready").style.display = "flex";
-    const url = `/data/${TID}/page.html?t=` + Date.now();
-    $("open").href = url; $("dl").href = url;
-    $("preview").src = url; $("previewWrap").style.display = "block"; sizePreview();
-    return;                                  // stop polling
-  }
-  if(s.status === "error"){
-    $("errorActions").style.display = "flex";
-    return;                                  // stop polling - nothing changes without a manual retry
-  }
-  setTimeout(poll, 1500);
-}
-poll();
+        if (s.status === "ready") {
+          $("stage").textContent = "הדף מוכן ✓";
+          $("ready").style.display = "flex";
+          const url = `/data/${TID}/page.html?t=` + Date.now();
+          $("open").href = url;
+          $("dl").href = url;
+          $("preview").src = url;
+          $("previewWrap").style.display = "block";
+          sizePreview();
+          return; // stop polling
+        }
+        if (s.status === "error") {
+          $("errorActions").style.display = "flex";
+          return; // stop polling - nothing changes without a manual retry
+        }
+        setTimeout(poll, 1500);
+      }
+      poll();
 
-const pickModal = $("pickModal");
-function closePickModal(){ pickModal.hidden = true; $("addphotos").disabled = false; }
-$("pickModalClose").onclick = closePickModal;
-pickModal.addEventListener('click', (e) => { if(e.target === pickModal) closePickModal(); });
-document.addEventListener('keydown', (e) => { if(e.key === 'Escape' && !pickModal.hidden) closePickModal(); });
+      const pickModal = $("pickModal");
+      function closePickModal() {
+        pickModal.hidden = true;
+        $("addphotos").disabled = false;
+      }
+      $("pickModalClose").onclick = closePickModal;
+      pickModal.addEventListener("click", (e) => {
+        if (e.target === pickModal) closePickModal();
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && !pickModal.hidden) closePickModal();
+      });
 
-// one click opens one popup, synchronously (required to dodge the browser's
-// popup blocker). That same popup then walks - on its own - through Google's
-// consent screen (if needed) and our bridge page straight to the real picker
-// (see _photos_bridge_page in webapp.py). This tab never navigates; it just
-// listens for that popup to report "connected" via postMessage, so the modal
-// opens without a second click. pickerlink stays as a manual fallback in
-// case the popup got blocked or something else went wrong.
-window.addEventListener('message', (ev) => {
-  if (ev.origin !== window.location.origin) return;
-  if (ev.data && ev.data.type === 'memotrip_photos_ready') {
-    $("addphotos").disabled = false;
-    pickModal.hidden = false;
-  }
-});
+      // one click opens one popup, synchronously (required to dodge the browser's
+      // popup blocker). That same popup then walks - on its own - through Google's
+      // consent screen (if needed) and our bridge page straight to the real picker
+      // (see _photos_bridge_page in webapp.py). This tab never navigates; it just
+      // listens for that popup to report "connected" via postMessage, so the modal
+      // opens without a second click. pickerlink stays as a manual fallback in
+      // case the popup got blocked or something else went wrong.
+      window.addEventListener("message", (ev) => {
+        if (ev.origin !== window.location.origin) return;
+        if (ev.data && ev.data.type === "memotrip_photos_ready") {
+          $("addphotos").disabled = false;
+          pickModal.hidden = false;
+        }
+      });
 
-async function startAddPhotos(){
-  const popup = window.open('', '_blank');   // must be synchronous, right here - see comment above
-  $("addphotos").disabled = true;
-  const r = await fetch(`/trips/${TID}/photos/start`, {method:"POST"});
-  const j = await r.json();
-  if(j.error){
-    if(j.connect_url || j.login_url){
-      const url = j.connect_url || j.login_url;
-      if(popup){ popup.location = url; } else { window.location.href = url; }
-      return;   // message listener re-enables the button and opens the modal once the popup finishes
-    }
-    if(popup) popup.close();
-    alert(j.error); $("addphotos").disabled=false; return;
-  }
-  $("pickerlink").href = j.picker_uri;
-  if(popup){ popup.location = j.picker_uri; }
-  pickModal.hidden = false;
-}
-$("addphotos").onclick = startAddPhotos;
+      async function startAddPhotos() {
+        const popup = window.open("", "_blank"); // must be synchronous, right here - see comment above
+        $("addphotos").disabled = true;
+        const r = await fetch(`/trips/${TID}/photos/start`, { method: "POST" });
+        const j = await r.json();
+        if (j.error) {
+          if (j.connect_url || j.login_url) {
+            const url = j.connect_url || j.login_url;
+            if (popup) {
+              popup.location = url;
+            } else {
+              window.location.href = url;
+            }
+            return; // message listener re-enables the button and opens the modal once the popup finishes
+          }
+          if (popup) popup.close();
+          alert(j.error);
+          $("addphotos").disabled = false;
+          return;
+        }
+        $("pickerlink").href = j.picker_uri;
+        if (popup) {
+          popup.location = j.picker_uri;
+        }
+        pickModal.hidden = false;
+      }
+      $("addphotos").onclick = startAddPhotos;
 
-// fallback only: reached if the callback's own attempt to open a session
-// right after connecting somehow failed and fell back to redirecting here
-// instead of straight to the picker (see webapp.py's oauth_photos_callback).
-if(new URLSearchParams(location.search).get("resume_photos") === "1"){
-  history.replaceState(null, "", location.pathname);
-  (async () => {
-    const r = await fetch(`/trips/${TID}/photos/start`, {method:"POST"});
-    const j = await r.json();
-    if(!j.error){ $("pickerlink").href = j.picker_uri; pickModal.hidden = false; }
-  })();
-}
-$("reroll").onclick = async () => {
-  $("reroll").disabled = true;
-  const r = await fetch(`/trips/${TID}/theme/reroll`, {method:"POST"});
-  const j = await r.json();
-  $("reroll").disabled = false;
-  if(j.error){ alert(j.error); return; }
-  const url = `/data/${TID}/page.html?t=` + Date.now();
-  $("open").href = url; $("dl").href = url; $("preview").src = url;
-};
-$("donepick").onclick = async () => {
-  const r = await fetch(`/trips/${TID}/photos/finish`, {method:"POST"});
-  const j = await r.json().catch(() => ({}));
-  if(j.error){
-    if(j.connect_url || j.login_url){ window.location.href = j.connect_url || j.login_url; return; }
-    alert(j.error);
-  }
-  pickModal.hidden = true;
-  $("addphotos").disabled = false;
-  $("ready").style.display = "none";
-  poll();
-};
-</script>
-</body>
+      // fallback only: reached if the callback's own attempt to open a session
+      // right after connecting somehow failed and fell back to redirecting here
+      // instead of straight to the picker (see webapp.py's oauth_photos_callback).
+      if (new URLSearchParams(location.search).get("resume_photos") === "1") {
+        history.replaceState(null, "", location.pathname);
+        (async () => {
+          const r = await fetch(`/trips/${TID}/photos/start`, { method: "POST" });
+          const j = await r.json();
+          if (!j.error) {
+            $("pickerlink").href = j.picker_uri;
+            pickModal.hidden = false;
+          }
+        })();
+      }
+      $("reroll").onclick = async () => {
+        $("reroll").disabled = true;
+        const r = await fetch(`/trips/${TID}/theme/reroll`, { method: "POST" });
+        const j = await r.json();
+        $("reroll").disabled = false;
+        if (j.error) {
+          alert(j.error);
+          return;
+        }
+        const url = `/data/${TID}/page.html?t=` + Date.now();
+        $("open").href = url;
+        $("dl").href = url;
+        $("preview").src = url;
+      };
+      $("donepick").onclick = async () => {
+        const r = await fetch(`/trips/${TID}/photos/finish`, { method: "POST" });
+        const j = await r.json().catch(() => ({}));
+        if (j.error) {
+          if (j.connect_url || j.login_url) {
+            window.location.href = j.connect_url || j.login_url;
+            return;
+          }
+          alert(j.error);
+        }
+        pickModal.hidden = true;
+        $("addphotos").disabled = false;
+        $("ready").style.display = "none";
+        poll();
+      };
+    </script>
+  </body>
 </html>

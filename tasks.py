@@ -10,6 +10,7 @@ threads.
 Local dev (CLOUD_TASKS_QUEUE unset): falls back to exactly the old
 in-process threading.Thread behavior — no GCP infra required to develop.
 """
+
 from __future__ import annotations
 
 import threading
@@ -23,6 +24,7 @@ def enqueue(kind: str, tid: str) -> None:
         _enqueue_cloud_task(kind, tid)
         return
     import webapp  # local import — avoids a circular import at module load time
+
     target = webapp.run_build if kind == "build" else webapp.run_photos
     threading.Thread(target=target, args=(tid,), daemon=True).start()
 
