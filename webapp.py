@@ -39,6 +39,7 @@ from fastapi import FastAPI, Form, Header, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
+from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 import build_trip
 import parse_docs
@@ -48,6 +49,7 @@ import fetch_photos
 import palette
 import config
 import db as _db
+import mailer
 import tasks
 
 ROOT = pathlib.Path(__file__).resolve().parent
@@ -67,6 +69,11 @@ if not _secret_path.exists():
     _secret_path.write_text(secrets.token_hex(32), encoding="utf-8")
 SESSION_SECRET = os.environ.get("SESSION_SECRET") or _secret_path.read_text(encoding="utf-8").strip()
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET, same_site="lax")
+
+# a distinct salt (not the raw SESSION_SECRET) so a leaked reset link's token
+# can never be replayed as a session cookie or vice versa - see
+# _make_reset_token/_verify_reset_token near the auth routes below.
+_reset_serializer = URLSafeTimedSerializer(SESSION_SECRET, salt="password-reset")
 
 TPLDIR = ROOT / "webapp_templates"
 
@@ -123,6 +130,30 @@ def get_user_by_email(email: str):
 # through things like "<script>...</script>@x.com" as a "valid" email
 EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$")
 MAX_PASSWORD_LEN = 72   # bcrypt's own hard limit in bytes; hashing a longer one raises
+RESET_TOKEN_MAX_AGE = 3600   # 1 hour
+
+
+def _make_reset_token(user) -> str:
+    """Signs (user id, current password hash) together - no separate table
+    to track used/expired tokens needed, because changing the password (via
+    this token or any other route) changes the hash, which makes every token
+    minted before that change fail verification on its own from then on."""
+    return _reset_serializer.dumps(f"{user['id']}:{user['password_hash']}")
+
+
+def _verify_reset_token(token: str):
+    """-> the user row if the token is well-formed, unexpired, and its
+    embedded password hash still matches the account's current one; None
+    otherwise (expired, tampered, already used, or the account is gone)."""
+    try:
+        payload = _reset_serializer.loads(token, max_age=RESET_TOKEN_MAX_AGE)
+        uid_str, pwh = payload.split(":", 1)
+    except (BadSignature, SignatureExpired, ValueError):
+        return None
+    user = get_user(int(uid_str))
+    if not user or user["password_hash"] != pwh:
+        return None
+    return user
 
 
 def get_user(uid: int):
@@ -422,6 +453,7 @@ def login_page(request: Request, signup: str = "", error: str = ""):
         PW_AUTOCOMPLETE=("new-password" if is_signup else "current-password"),
         PW_HINT=('<div class="hint-small">לפחות 6 תווים.</div>' if is_signup else ""),
         SUBMIT_LABEL=("יצירת חשבון" if is_signup else "התחברות"),
+        FORGOT_LINK=("" if is_signup else '<p class="guest"><a href="/forgot-password">שכחתי סיסמה</a></p>'),
         ERROR=(f'<div class="err-banner show">{_html.escape(error)}</div>' if error else ""))
 
 
@@ -475,6 +507,85 @@ def signup_submit(request: Request, email: str = Form(""), password: str = Form(
                 "/login?signup=1&error=" + urllib.parse.quote("כבר יש חשבון עם האימייל הזה."), status_code=303)
         raise
     _finish_login(request, get_user_by_email(email)["id"])
+    return RedirectResponse("/", status_code=303)
+
+
+@app.get("/forgot-password", response_class=HTMLResponse)
+def forgot_password_page(request: Request, sent: str = ""):
+    if current_user(request):
+        return RedirectResponse("/", status_code=303)
+    if sent:
+        body = ('<p class="sub">אם קיים חשבון עם האימייל הזה, שלחנו אליו קישור לאיפוס '
+                'הסיסמה. בדקו את תיבת הדואר (וגם את תיקיית הספאם).</p>')
+    else:
+        body = ('<p class="sub">הזינו את האימייל שאיתו נרשמתם, ונשלח אליו קישור לאיפוס הסיסמה.</p>'
+                '<form method="post" action="/forgot-password">'
+                '<label>אימייל</label>'
+                '<input type="email" name="email" required autocomplete="email">'
+                '<button type="submit">שליחת קישור</button>'
+                '</form>')
+    return render("forgot_password.html", BODY=body)
+
+
+@app.post("/forgot-password")
+def forgot_password_submit(email: str = Form("")):
+    email = email.strip().lower()
+    user = get_user_by_email(email)
+    if user:
+        token = _make_reset_token(user)
+        link = f"{config.PUBLIC_BASE_URL}/reset-password?token={urllib.parse.quote(token)}"
+        html = (f'<div dir="rtl" style="font-family:Arial,sans-serif;line-height:1.6">'
+                f'<h2>איפוס סיסמה ל-MemoTrip</h2>'
+                f'<p>קיבלנו בקשה לאיפוס הסיסמה של החשבון שלך. הקישור בתוקף לשעה אחת:</p>'
+                f'<p><a href="{link}">לחצו כאן לאיפוס הסיסמה</a></p>'
+                f'<p style="color:#888;font-size:0.85em">אם לא ביקשתם זאת, אפשר להתעלם מהמייל '
+                f'הזה — הסיסמה שלכם לא תשתנה.</p></div>')
+        try:
+            mailer.send(email, "איפוס סיסמה ל-MemoTrip", html)
+        except Exception:
+            # a mail-provider hiccup (rate limit, an unverified sending
+            # domain, a transient outage) is not the requesting user's fault
+            # and reveals nothing sensitive to them either way - log it for
+            # us to notice and keep showing the same generic confirmation,
+            # instead of a raw 500 on top of them already having forgotten
+            # their password.
+            traceback.print_exc()
+    # same response whether or not the email exists - avoids exposing which
+    # addresses have accounts
+    return RedirectResponse("/forgot-password?sent=1", status_code=303)
+
+
+@app.get("/reset-password", response_class=HTMLResponse)
+def reset_password_page(token: str = "", error: str = ""):
+    user = _verify_reset_token(token)
+    if not user:
+        body = ('<p class="sub">הקישור לא תקין, כבר נוצל, או שפג תוקפו.</p>'
+                '<p class="guest"><a href="/forgot-password">בקשת קישור חדש</a></p>')
+        return render("reset_password.html", BODY=body)
+    error_html = f'<div class="err-banner show">{_html.escape(error)}</div>' if error else ""
+    body = (f'{error_html}'
+            f'<form method="post" action="/reset-password">'
+            f'<input type="hidden" name="token" value="{_html.escape(token)}">'
+            f'<label>סיסמה חדשה</label>'
+            f'<input type="password" name="password" required autocomplete="new-password">'
+            f'<div class="hint-small">בין 6 ל-{MAX_PASSWORD_LEN} תווים.</div>'
+            f'<button type="submit">עדכון סיסמה</button>'
+            f'</form>')
+    return render("reset_password.html", BODY=body)
+
+
+@app.post("/reset-password")
+def reset_password_submit(request: Request, token: str = Form(""), password: str = Form("")):
+    user = _verify_reset_token(token)
+    if not user:
+        return RedirectResponse("/forgot-password", status_code=303)
+    if len(password) < 6 or len(password) > MAX_PASSWORD_LEN:
+        return RedirectResponse(
+            f"/reset-password?token={urllib.parse.quote(token)}&error=" +
+            urllib.parse.quote(f"סיסמה בין 6 ל-{MAX_PASSWORD_LEN} תווים."), status_code=303)
+    with db() as c:
+        c.execute("UPDATE users SET password_hash=? WHERE id=?", (hash_password(password), user["id"]))
+    _finish_login(request, user["id"])
     return RedirectResponse("/", status_code=303)
 
 

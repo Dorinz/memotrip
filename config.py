@@ -25,6 +25,10 @@ SESSION_SECRET fallback in webapp.py).
                         dedicated directory, NOT under /app directly — Cloud
                         Run mounting a secret file there would shadow the
                         whole source tree and crash the container.
+    RESEND_API_KEY      Resend (resend.com) API key for sending the
+                        password-reset email - see mailer.py. Unset -> the
+                        email is printed to the server log instead of sent,
+                        so local dev works without a Resend account.
 """
 import os
 import pathlib
@@ -37,3 +41,4 @@ CLOUD_TASKS_QUEUE = os.environ.get("CLOUD_TASKS_QUEUE")
 TASKS_INVOKER_SA = os.environ.get("TASKS_INVOKER_SA")
 OAUTH_WEB_CLIENT_PATH = pathlib.Path(
     os.environ.get("OAUTH_WEB_CLIENT_PATH", str(ROOT / "credentials_web.json")))
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
