@@ -1,0 +1,43 @@
+# Runs on every push to the `main` branch (see the Cloud Build trigger).
+# Tests first - if they fail, the build stops here and nothing gets built
+# or deployed. Only a green test run reaches the Cloud Run service.
+steps:
+  - id: test
+    name: python:3.12-slim
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        pip install --no-cache-dir -r requirements.txt -r requirements-dev.txt
+        pytest tests/ -v
+
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/memotrip:$SHORT_SHA
+      - .
+
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/memotrip:$SHORT_SHA
+
+  - id: deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - memotrip
+      - --image=europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/memotrip:$SHORT_SHA
+      - --region=europe-west1
+      - --project=$PROJECT_ID
+
+images:
+  - europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/memotrip:$SHORT_SHA
+
+options:
+  logging: CLOUD_LOGGING_ONLY

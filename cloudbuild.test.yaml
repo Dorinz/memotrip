@@ -1,0 +1,13 @@
+# Runs on every push to the `dev` branch (see the Cloud Build trigger).
+# Tests only - never deploys anything.
+steps:
+  - name: python:3.12-slim
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        pip install --no-cache-dir -r requirements.txt -r requirements-dev.txt
+        pytest tests/ -v
+
+options:
+  logging: CLOUD_LOGGING_ONLY
