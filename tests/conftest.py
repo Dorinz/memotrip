@@ -20,7 +20,24 @@ if str(ROOT) not in sys.path:
 
 
 @pytest.fixture()
-def client(tmp_path, monkeypatch):
+def _stub_tasks_enqueue(monkeypatch):
+    """POSTing to /trips normally calls tasks.enqueue(), which - with no
+    CLOUD_TASKS_QUEUE configured (always true in tests) - starts a real
+    daemon thread running the full build pipeline, including a live call to
+    Gemini using whatever GEMINI_API_KEY happens to be in this machine's
+    .env. Stubbed out by default for every test using the `client` fixture
+    below, so no test accidentally hits the network from a background thread
+    that outlives (and can crash after) the test itself; a test of
+    tasks.enqueue()/the pipeline routes on its own terms (see test_tasks.py,
+    which never uses `client`) is unaffected, and a `client`-based test can
+    still re-monkeypatch tasks.enqueue locally to observe the call."""
+    import tasks
+
+    monkeypatch.setattr(tasks, "enqueue", lambda kind, tid: None)
+
+
+@pytest.fixture()
+def client(tmp_path, monkeypatch, _stub_tasks_enqueue):
     import db
 
     monkeypatch.setattr(db, "DB", tmp_path / "test.db")

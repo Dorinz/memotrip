@@ -427,7 +427,16 @@ def assemble(ai: dict | None, rx: dict, geo: dict | None = None) -> dict:
     geo = geo or {}
     spec = {"meta": {}, "locations": {}, "photos": {}, "timeline": []}
     loc_keys: dict[str, str] = {}
-    taken: set = set()
+    # Two independent slug() namespaces, not one shared set: a location key
+    # (spec["locations"][key]) and a stay's own item key (spec["photos"][key],
+    # what day items point back to via `key`) live in different dicts and
+    # never need to avoid each other. Sharing one `taken` set here used to
+    # make a stay's own key and its city's location key diverge on every
+    # first mention (e.g. item key "faro" vs. location key "faro2") for no
+    # functional reason - each namespace now dedupes only against itself, so
+    # a stay in a city and that city's own location entry naturally agree.
+    loc_taken: set = set()
+    item_taken: set = set()
     # coords the model already gave us, keyed by place name
     ai_coords = {
         p["name"]: {"lat": p["lat"], "lon": p["lon"]}
@@ -439,7 +448,7 @@ def assemble(ai: dict | None, rx: dict, geo: dict | None = None) -> dict:
         if not name:
             return None
         if name not in loc_keys:
-            key = slug(name, taken)
+            key = slug(name, loc_taken)
             loc_keys[name] = key
             c = ai_coords.get(name) or geo.get(name) or {"lat": None, "lon": None}
             spec["locations"][key] = {"label": name, "lat": c.get("lat"), "lon": c.get("lon")}
@@ -465,7 +474,7 @@ def assemble(ai: dict | None, rx: dict, geo: dict | None = None) -> dict:
                         t[f] = loc(t[f])
             if t.get("type") == "stay":
                 if not t.get("key"):
-                    t["key"] = slug(t.get("city") or "stay", taken)
+                    t["key"] = slug(t.get("city") or "stay", item_taken)
                 loc(t.get("city"))
             spec["timeline"].append(t)
             if t.get("type") in ("stay", "layover") and t.get("key"):
@@ -545,7 +554,7 @@ def assemble(ai: dict | None, rx: dict, geo: dict | None = None) -> dict:
                 "stay",
                 {
                     "type": "stay",
-                    "key": slug(s["place"], taken),
+                    "key": slug(s["place"], item_taken),
                     "city": s["place"],
                     "island": "",
                     "dates": f"{rng[0]}..{rng[1]}" if rng else "",
