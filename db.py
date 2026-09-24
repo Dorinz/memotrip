@@ -143,6 +143,15 @@ def _init_schema_sqlite() -> None:
         _c.execute("""CREATE TABLE IF NOT EXISTS photo_accounts(
             owner_key TEXT PRIMARY KEY,
             refresh_token TEXT, access_token TEXT, token_expiry TEXT, granted TEXT)""")
+        # one row per Gemini-backed generation action (new trip / rerun / photo
+        # pick finish), keyed by the same identity as photo_owner_key - see
+        # webapp.quota_exceeded(). ts is UTC "%Y-%m-%d %H:%M:%S", queried
+        # against a day window computed in Israel time.
+        _c.execute("""CREATE TABLE IF NOT EXISTS generations(
+            id INTEGER PRIMARY KEY AUTOINCREMENT, identity TEXT NOT NULL, ts TEXT NOT NULL)""")
+        _c.execute(
+            "CREATE INDEX IF NOT EXISTS idx_generations_identity_ts ON generations(identity, ts)"
+        )
 
 
 def _init_schema_pg() -> None:
@@ -175,3 +184,9 @@ def _init_schema_pg() -> None:
         _c.execute("""CREATE TABLE IF NOT EXISTS photo_accounts(
             owner_key TEXT PRIMARY KEY,
             refresh_token TEXT, access_token TEXT, token_expiry TEXT, granted TEXT)""")
+        # see the matching table in _init_schema_sqlite for what this is.
+        _c.execute("""CREATE TABLE IF NOT EXISTS generations(
+            id SERIAL PRIMARY KEY, identity TEXT NOT NULL, ts TEXT NOT NULL)""")
+        _c.execute(
+            "CREATE INDEX IF NOT EXISTS idx_generations_identity_ts ON generations(identity, ts)"
+        )

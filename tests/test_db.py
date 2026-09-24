@@ -159,6 +159,27 @@ def test_db_context_manager_commits_on_success(db_path):
     assert row is not None
 
 
+def test_generations_table_exists_with_identity_and_ts_columns(db_path):
+    db.init_schema()
+    with db.db() as c:
+        tables = {r["name"] for r in c.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        cols = _columns(c, "generations")
+    assert "generations" in tables
+    assert {"identity", "ts"} <= cols
+
+
+def test_generations_table_survives_reinit_with_existing_rows(db_path):
+    db.init_schema()
+    with db.db() as c:
+        c.execute(
+            "INSERT INTO generations(identity, ts) VALUES(?,?)", ("guest:x", "2026-01-01 00:00:00")
+        )
+    db.init_schema()  # re-running must not drop/clear the table
+    with db.db() as c:
+        rows = c.execute("SELECT * FROM generations").fetchall()
+    assert len(rows) == 1
+
+
 def test_q_leaves_placeholders_untouched_on_sqlite_path():
     assert db._q("SELECT * FROM t WHERE id=?") == "SELECT * FROM t WHERE id=?"
 

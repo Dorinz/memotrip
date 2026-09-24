@@ -21,6 +21,7 @@ try:
 except Exception:
     pass
 
+import datetime as dt
 import json
 import os
 import pathlib
@@ -33,6 +34,8 @@ import urllib.parse
 import uuid
 
 import html as _html
+
+from zoneinfo import ZoneInfo
 
 import bcrypt
 import uvicorn
@@ -58,6 +61,13 @@ DATA = ROOT / "webapp_data"
 TEMPLATE = (ROOT / "trip_template.html").read_text(encoding="utf-8")
 MODEL = os.environ.get("TRIP_MODEL", "gemini-3.6-flash")
 DATA.mkdir(exist_ok=True)
+
+# per-identity (see photo_owner_key) daily cap on Gemini-backed generation
+# actions - counted on the "day" as lived in Israel, this app's audience,
+# not server-local time or UTC.
+DAILY_GENERATION_LIMIT = 3
+ISRAEL_TZ = ZoneInfo("Asia/Jerusalem")
+QUOTA_MESSAGE = "אוף :( כבר ניצלת את המכסה היומית שלך, נסה שוב מאוחר יותר."
 
 app = FastAPI(title="MemoTrip")
 app.mount("/data", StaticFiles(directory=str(DATA)), name="data")
@@ -186,6 +196,42 @@ def photo_owner_key(request: Request) -> str:
         gid = secrets.token_urlsafe(16)
         request.session["guest_id"] = gid
     return f"guest:{gid}"
+
+
+def _israel_day_bounds_utc(now_utc: dt.datetime | None = None) -> tuple[str, str]:
+    """[start, end) of "today" as lived in Israel, expressed as UTC-naive
+    strings comparable against generations.ts (also stored in that format) -
+    so the day boundary follows Israel's calendar/DST, not the server's."""
+    now_utc = now_utc or dt.datetime.now(dt.timezone.utc)
+    now_il = now_utc.astimezone(ISRAEL_TZ)
+    start_il = now_il.replace(hour=0, minute=0, second=0, microsecond=0)
+    end_il = start_il + dt.timedelta(days=1)
+    fmt = "%Y-%m-%d %H:%M:%S"
+    return (
+        start_il.astimezone(dt.timezone.utc).strftime(fmt),
+        end_il.astimezone(dt.timezone.utc).strftime(fmt),
+    )
+
+
+def quota_exceeded(identity: str) -> bool:
+    """True once `identity` (see photo_owner_key) has hit today's
+    (Israel-time) cap on Gemini-backed generation actions: a new trip, a
+    rerun, or finishing a photo pick - each burns real API calls."""
+    start, end = _israel_day_bounds_utc()
+    with db() as c:
+        row = c.execute(
+            "SELECT COUNT(*) AS n FROM generations WHERE identity=? AND ts>=? AND ts<?",
+            (identity, start, end),
+        ).fetchone()
+    return row["n"] >= DAILY_GENERATION_LIMIT
+
+
+def record_generation(identity: str) -> None:
+    with db() as c:
+        c.execute(
+            "INSERT INTO generations(identity, ts) VALUES(?,?)",
+            (identity, dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")),
+        )
 
 
 def update(tid: str, **fields):
@@ -792,6 +838,9 @@ async def create(
     picker_sid: str = Form(""),
     docs: list[UploadFile] = None,
 ):
+    identity = photo_owner_key(request)
+    if quota_exceeded(identity):
+        return JSONResponse({"error": QUOTA_MESSAGE}, status_code=429)
     tid = uuid.uuid4().hex
     d = trip_dir(tid)
     (d / "docs").mkdir(parents=True, exist_ok=True)
@@ -824,9 +873,10 @@ async def create(
                 "",
                 picker_sid or None,
                 user["id"] if user else None,
-                photo_owner_key(request),
+                identity,
             ),
         )
+    record_generation(identity)
     tasks.enqueue("build", tid)
     return RedirectResponse(f"/trips/{tid}", status_code=303)
 
@@ -875,12 +925,24 @@ def photos_start(tid: str, request: Request):
 def photos_finish(tid: str, request: Request):
     if not get_trip(tid)["picker_sid"]:
         return JSONResponse({"error": "start the picker first"}, status_code=400)
+    identity = photo_owner_key(request)
+    if quota_exceeded(identity):
+        return JSONResponse({"error": QUOTA_MESSAGE}, status_code=429)
+    record_generation(identity)
     tasks.enqueue("photos", tid)
     return {"ok": True}
 
 
 @app.post("/trips/{tid}/rerun")
-def rerun(tid: str):
+def rerun(tid: str, request: Request):
+    identity = photo_owner_key(request)
+    if quota_exceeded(identity):
+        # a plain HTML <form> posts here (full navigation, no fetch/JSON on
+        # the client) - reuse the trip's own error field so trip.html's
+        # existing status-poll banner shows it, same as a real build error.
+        update(tid, error=QUOTA_MESSAGE)
+        return RedirectResponse(f"/trips/{tid}", status_code=303)
+    record_generation(identity)
     tasks.enqueue("build", tid)
     return RedirectResponse(f"/trips/{tid}", status_code=303)
 
