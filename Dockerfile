@@ -8,6 +8,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 ENV PORT=8080
+# print() straight to the log, not in buffered blocks - otherwise a trip's
+# progress lines only reach Cloud Logging long after (or when) its task ends
+ENV PYTHONUNBUFFERED=1
 EXPOSE 8080
 
 # Shell form (no brackets) so ${PORT} actually expands — Cloud Run injects
