@@ -87,6 +87,7 @@ def _install_fake_tasks_v2(monkeypatch, captured):
 def test_enqueue_with_queue_configured_creates_a_cloud_task(monkeypatch):
     monkeypatch.setattr(config, "CLOUD_TASKS_QUEUE", "projects/p/locations/l/queues/q")
     monkeypatch.setattr(config, "PUBLIC_BASE_URL", "https://memotrip.app")
+    monkeypatch.setattr(config, "TASKS_TARGET_URL", "https://memotrip-worker.run.app")
     monkeypatch.setattr(config, "TASKS_INVOKER_SA", "invoker@p.iam.gserviceaccount.com")
     captured = {}
     _install_fake_tasks_v2(monkeypatch, captured)
@@ -95,9 +96,10 @@ def test_enqueue_with_queue_configured_creates_a_cloud_task(monkeypatch):
 
     assert captured["parent"] == "projects/p/locations/l/queues/q"
     req = captured["task"]["http_request"]
-    assert req["url"] == "https://memotrip.app/internal/tasks/build/trip123"
+    assert req["url"] == "https://memotrip-worker.run.app/internal/tasks/build/trip123"
     assert req["oidc_token"]["audience"] == req["url"]
     assert req["oidc_token"]["service_account_email"] == "invoker@p.iam.gserviceaccount.com"
+    assert captured["task"]["dispatch_deadline"] == {"seconds": 1800}
 
 
 def test_enqueue_with_queue_configured_never_starts_a_local_thread(monkeypatch):

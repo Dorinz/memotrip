@@ -3,6 +3,7 @@
 # fetch_photos.py       - the google-auth trio
 
 Pillow>=10.4
+timezonefinder>=6.5  # select_photos.py: day's coordinates -> IANA zone, offline
 
 # fetch_photos.py (Google Photos Picker API)
 google-auth>=2.30

@@ -41,6 +41,7 @@ import pathlib
 import re
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 try:
     from google_auth_oauthlib.flow import InstalledAppFlow, Flow
@@ -64,6 +65,18 @@ except Exception:
 
 SCOPES = ["https://www.googleapis.com/auth/photospicker.mediaitems.readonly"]
 BASE = "https://photospicker.googleapis.com/v1"
+# photo downloads in flight at once - stays under requests' default pool of 10
+# connections per host, so the shared session never has to open extra sockets
+DOWNLOAD_WORKERS = 8
+DOWNLOAD_ATTEMPTS = 3
+
+
+def _try(fn, *args):
+    """(result, None) or (None, exception) - lets a pool keep going past one failure."""
+    try:
+        return fn(*args), None
+    except Exception as e:
+        return None, e
 
 
 def _ok(r):
@@ -98,8 +111,13 @@ def authorise(creds_path: pathlib.Path, token_path: pathlib.Path) -> AuthorizedS
         creds = Credentials.from_authorized_user_file(str(token_path), SCOPES)
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
+            try:
+                creds.refresh(Request())
+            except RefreshError:
+                # revoked (a testing-mode OAuth app's refresh tokens die after ~7
+                # days) - sign in again in the browser below
+                creds = None
+        if not creds or not creds.valid:
             if not creds_path.exists():
                 sys.exit(f"missing {creds_path} - see the setup notes at the top of this file")
             creds = InstalledAppFlow.from_client_secrets_file(
@@ -301,15 +319,24 @@ def session_ready(http: AuthorizedSession, sid: str) -> bool:
     return bool(_ok(http.get(f"{BASE}/sessions/{sid}")).json().get("mediaItemsSet"))
 
 
-def collect(http: AuthorizedSession, sid: str, out: pathlib.Path, size: int) -> list[dict]:
-    """List + download the picked items; write manifest.json. Assumes session_ready() is True."""
+def collect(
+    http: AuthorizedSession, sid: str, out: pathlib.Path, size: int, keep_session: bool = False
+) -> list[dict]:
+    """List + download the picked items; write manifest.json. Assumes session_ready() is True.
+    keep_session=True leaves the Picker session open so upgrade() can still fetch
+    bigger copies afterwards - the caller must close_session() when done."""
     items = list_items(http, sid)
     manifest = download(http, items, out, size)
+    if not keep_session:
+        close_session(http, sid)
+    return manifest
+
+
+def close_session(http: AuthorizedSession, sid: str) -> None:
     try:
         http.delete(f"{BASE}/sessions/{sid}")
     except Exception:
         pass
-    return manifest
 
 
 def wait_for_pick(http: AuthorizedSession, session: dict) -> None:
@@ -345,14 +372,54 @@ def list_items(http: AuthorizedSession, sid: str) -> list[dict]:
             return items
 
 
-def download(http: AuthorizedSession, items: list[dict], out: pathlib.Path, px: int) -> list[dict]:
+def _fetch_one(http: AuthorizedSession, url: str, attempts: int = DOWNLOAD_ATTEMPTS) -> bytes:
+    """GET one photo, retrying a few times - with several downloads in flight a
+    transient 429/5xx or dropped connection is more likely than when serial."""
+    for attempt in range(1, attempts + 1):
+        try:
+            return _ok(http.get(url)).content
+        except Exception:
+            if attempt == attempts:
+                raise
+            time.sleep(attempt)
+
+
+def _fetch_all(http: AuthorizedSession, jobs: list[tuple[str, pathlib.Path]], workers: int):
+    """Download (url, dest) pairs `workers` at a time; [(bytes_written, None) |
+    (None, error)] in the same order as `jobs`."""
+
+    def fetch(job):
+        url, dest = job
+        data = _fetch_one(http, url)
+        dest.write_bytes(data)
+        return len(data)
+
+    with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
+        return list(pool.map(lambda j: _try(fetch, j), jobs))
+
+
+def _write_manifest(out: pathlib.Path, data: dict) -> None:
+    (out / "manifest.json").write_bytes(
+        (json.dumps(data, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+    )
+
+
+def download(
+    http: AuthorizedSession,
+    items: list[dict],
+    out: pathlib.Path,
+    px: int,
+    workers: int = DOWNLOAD_WORKERS,
+) -> list[dict]:
+    """Download every picked photo, `workers` at a time. A photo that still
+    fails after retries is skipped (and reported) rather than failing the trip."""
     out.mkdir(parents=True, exist_ok=True)
-    manifest, n, used = [], 0, set()
+    # names first, in pick order, so duplicate-filename numbering stays deterministic
+    jobs, used = [], set()
     for it in items:
         if it.get("type") != "PHOTO":
             continue
         mf = it.get("mediaFile", {})
-        meta = mf.get("mediaFileMetadata", {})
         stem = re.sub(r"[^\w.\-]+", "_", mf.get("filename") or it["id"][:16])
         stem = pathlib.Path(stem).stem
         name = f"{stem}.jpg"
@@ -361,10 +428,23 @@ def download(http: AuthorizedSession, items: list[dict], out: pathlib.Path, px: 
             name = f"{stem}_{i}.jpg"
             i += 1
         used.add(name)
-        # =wN-hN  -> fit inside NxN, re-encoded, auto-oriented, no EXIF. never =d (original).
-        r = _ok(http.get(f'{mf["baseUrl"]}=w{px}-h{px}'))
-        (out / name).write_bytes(r.content)
-        n += 1
+        jobs.append((it, name))
+
+    # =wN-hN  -> fit inside NxN, re-encoded, auto-oriented, no EXIF. never =d (original).
+    # results come back in pick order, so the manifest matches a serial run
+    results = _fetch_all(
+        http,
+        [(f'{it["mediaFile"]["baseUrl"]}=w{px}-h{px}', out / name) for it, name in jobs],
+        workers,
+    )
+    manifest, failed = [], 0
+    for (it, name), (size, err) in zip(jobs, results):
+        if err is not None:
+            failed += 1
+            print(f"    ! {name}: {err}", file=sys.stderr)
+            continue
+        mf = it["mediaFile"]
+        meta = mf.get("mediaFileMetadata", {})
         manifest.append(
             {
                 "id": it["id"],
@@ -372,18 +452,51 @@ def download(http: AuthorizedSession, items: list[dict], out: pathlib.Path, px: 
                 "createTime": it.get("createTime", ""),
                 "orig_width": int(meta.get("width") or 0),
                 "orig_height": int(meta.get("height") or 0),
+                # usable only while the Picker session is open (and with the
+                # user's token) - kept so upgrade() can fetch a bigger copy
+                "baseUrl": mf["baseUrl"],
             }
         )
-        print(f"    {name}  ({len(r.content)//1024} KB)")
-    (out / "manifest.json").write_bytes(
-        (
-            json.dumps(
-                {"downscale_px": px, "count": n, "items": manifest}, ensure_ascii=False, indent=2
-            )
-            + "\n"
-        ).encode("utf-8")
-    )
+        print(f"    {name}  ({size//1024} KB)")
+    if failed:
+        print(f"    {failed} photo(s) could not be downloaded - skipped", file=sys.stderr)
+    _write_manifest(out, {"downscale_px": px, "count": len(manifest), "items": manifest})
     return manifest
+
+
+def upgrade(
+    http: AuthorizedSession,
+    out: pathlib.Path,
+    files: list[str],
+    px: int = 1600,
+    workers: int = DOWNLOAD_WORKERS,
+) -> dict[str, pathlib.Path]:
+    """Fetch a `px` copy of each named photo (by its manifest `file`) into
+    out/full/ and record it as `full_file` in manifest.json. A photo that already
+    has one is not fetched again. Needs the Picker session still open.
+    Returns {file: full-size path} for every requested photo that has one."""
+    data = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+    by_file = {it["file"]: it for it in data.get("items", [])}
+
+    def full(it):
+        p = out / it["full_file"] if it.get("full_file") else None
+        return p if p and p.exists() else None
+
+    wanted = [by_file[f] for f in dict.fromkeys(files) if f in by_file]
+    todo = [it for it in wanted if not full(it) and it.get("baseUrl")]
+    full_dir = out / "full"
+    full_dir.mkdir(parents=True, exist_ok=True)
+    results = _fetch_all(
+        http, [(f'{it["baseUrl"]}=w{px}-h{px}', full_dir / it["file"]) for it in todo], workers
+    )
+    for it, (size, err) in zip(todo, results):
+        if err is not None:
+            print(f"    ! {it['file']} ({px}px): {err}", file=sys.stderr)
+            continue
+        it["full_file"] = f"full/{it['file']}"
+    data["full_px"] = px
+    _write_manifest(out, data)
+    return {it["file"]: full(it) for it in wanted if full(it)}
 
 
 def main() -> int:

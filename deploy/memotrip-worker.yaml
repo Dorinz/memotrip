@@ -1,0 +1,100 @@
+# memotrip-worker: the private Cloud Run service that runs the background
+# pipeline (/internal/tasks/* - trip builds and photo picks), so heavy work
+# never shares instances with the public site (memotrip). Same image and the
+# same secrets / bucket / Cloud SQL / service account as memotrip - only the
+# sizing differs: 2 CPU / 2Gi, 2 tasks per instance, 30-minute timeout, max 4
+# instances (= the queue's maxConcurrentDispatches of 8).
+#
+# Not public: no allUsers invoker binding, so Cloud Run itself rejects calls
+# that don't carry an ID token from an account with roles/run.invoker on it
+# (tasks-invoker@...), on top of the app's own OIDC check.
+#
+# Create / reconfigure (image is then kept current by cloudbuild.deploy.yaml):
+#   gcloud run services replace deploy/memotrip-worker.yaml --region=europe-west1
+#   gcloud run services add-iam-policy-binding memotrip-worker --region=europe-west1 \
+#     --member=serviceAccount:tasks-invoker@trip-journal-508221.iam.gserviceaccount.com \
+#     --role=roles/run.invoker
+# Secrets appear here only as Secret Manager references, never values.
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: memotrip-worker
+  labels:
+    cloud.googleapis.com/location: europe-west1
+  annotations:
+    run.googleapis.com/ingress: all
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/maxScale: '4'
+        run.googleapis.com/cloudsql-instances: trip-journal-508221:europe-west1:trip-journal-db-eu
+        run.googleapis.com/startup-cpu-boost: 'true'
+        run.googleapis.com/execution-environment: gen2
+    spec:
+      containerConcurrency: 2
+      containers:
+      - env:
+        - name: CLOUD_TASKS_QUEUE
+          value: projects/trip-journal-508221/locations/me-central1/queues/trip-build-queue
+        - name: TASKS_INVOKER_SA
+          value: tasks-invoker@trip-journal-508221.iam.gserviceaccount.com
+        - name: OAUTH_WEB_CLIENT_PATH
+          value: /secrets/credentials_web.json
+        - name: GEMINI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              key: latest
+              name: gemini-api-key
+        - name: SESSION_SECRET
+          valueFrom:
+            secretKeyRef:
+              key: latest
+              name: session-secret
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              key: latest
+              name: database-url
+        - name: PUBLIC_BASE_URL
+          value: https://memotrip.app
+        - name: RESEND_API_KEY
+          valueFrom:
+            secretKeyRef:
+              key: latest
+              name: resend-api-key
+        - name: TASKS_TARGET_URL
+          value: https://memotrip-worker-273425666206.europe-west1.run.app
+        image: europe-west1-docker.pkg.dev/trip-journal-508221/cloud-run-source-deploy/memotrip:ddae0ab
+        ports:
+        - containerPort: 8080
+          name: http1
+        resources:
+          limits:
+            cpu: '2'
+            memory: 2Gi
+        startupProbe:
+          failureThreshold: 1
+          periodSeconds: 240
+          tcpSocket:
+            port: 8080
+          timeoutSeconds: 240
+        volumeMounts:
+        - mountPath: /secrets
+          name: oauth-web-client-lir-wuw
+        - mountPath: /app/webapp_data
+          name: data
+      serviceAccountName: memotrip-run@trip-journal-508221.iam.gserviceaccount.com
+      timeoutSeconds: 1800
+      volumes:
+      - name: oauth-web-client-lir-wuw
+        secret:
+          items:
+          - key: latest
+            path: credentials_web.json
+          secretName: oauth-web-client
+      - csi:
+          driver: gcsfuse.run.googleapis.com
+          volumeAttributes:
+            bucketName: trip-journal-508221-data-eu
+        name: data

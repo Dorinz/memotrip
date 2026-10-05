@@ -650,6 +650,16 @@
           .join("");
       }
 
+      // lodging photos come from the booking itself, never the trip album - with
+      // none, the whole block (label + gallery) is left out rather than shown as
+      // empty placeholders
+      function lodgingGalleryHTML(list, alt) {
+        if (!(list && list.length)) return "";
+        return `
+      <div class="gallery-label">תמונות מהדירה</div>
+      <div class="gallery">${galleryHTML(list, 0, "", "", alt)}</div>`;
+      }
+
       // the itinerary-row head, adopted from the reference: a big running day number
       // + dashed rule, ahead of the place name — shared by day/stay/layover sections
       function stayHead(numLabel, dates, isl, heading) {
@@ -679,13 +689,7 @@
 
         let lodgingHTML = "";
         if (isCheckIn) {
-          const lodgingGallery = galleryHTML(
-            media.lodging,
-            2,
-            "🏠",
-            "תמונת הדירה תבוא כאן",
-            item.title,
-          );
+          const lodgingGallery = lodgingGalleryHTML(media.lodging, item.title);
           const hostHTML = item.airbnb
             ? `<a href="${item.airbnb}" target="_blank" rel="noopener noreferrer" class="host-link">${item.host} ↗</a>`
             : `<b>${item.host || ""}</b>`;
@@ -703,8 +707,7 @@
         </div>
         ${item.code ? `<div class="code" title="קוד אישור Airbnb">${item.code}</div>` : ""}
       </div>
-      <div class="gallery-label">תמונות מהדירה</div>
-      <div class="gallery">${lodgingGallery}</div>`;
+      ${lodgingGallery}`;
         }
 
         return `
@@ -723,13 +726,7 @@
 
       function stayHTML(item) {
         const media = PHOTOS[item.key] || {};
-        const lodgingGallery = galleryHTML(
-          media.lodging,
-          4,
-          "🏠",
-          "תמונת הדירה תבוא כאן",
-          item.title,
-        );
+        const lodgingGallery = lodgingGalleryHTML(media.lodging, item.title);
         const tripGallery = galleryHTML(media.trip, 6, "🖼", "תמונה שלכם תבוא כאן", item.title);
         const hostHTML = item.airbnb
           ? `<a href="${item.airbnb}" target="_blank" rel="noopener noreferrer" class="host-link">${item.host} ↗</a>`
@@ -756,8 +753,7 @@
         </div>
         ${item.code ? `<div class="code" title="קוד אישור Airbnb">${item.code}</div>` : ""}
       </div>
-      <div class="gallery-label">תמונות מהדירה</div>
-      <div class="gallery">${lodgingGallery}</div>
+      ${lodgingGallery}
       <div class="gallery-label">תמונות מהטיול</div>
       <div class="gallery">${tripGallery}</div>
       <div class="tags">${(item.tags || []).map((t) => `<div class="tag">${t}</div>`).join("")}</div>

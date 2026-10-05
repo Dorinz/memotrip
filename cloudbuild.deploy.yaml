@@ -25,6 +25,23 @@ steps:
       - push
       - europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/memotrip:$SHORT_SHA
 
+  # `gcloud run deploy` only changes what it's given and keeps every other
+  # setting of the live service. These were set once on the service itself
+  # (console / gcloud) and are NOT re-applied here - recorded so they're known:
+  #   - volume "data": Cloud Storage FUSE, bucket trip-journal-508221-data-eu
+  #     (europe-west1), mounted at /app/webapp_data - every trip's files
+  #     (docs, gphotos/, images/, page.html) live in the bucket, shared by all
+  #     instances and kept across restarts. Bucket soft-delete: 7 days.
+  #   - volume "oauth-web-client-lir-wuw": Secret Manager secret
+  #     oauth-web-client -> /secrets/credentials_web.json
+  #   - Cloud SQL instance trip-journal-508221:europe-west1:trip-journal-db-eu
+  #   - service account memotrip-run@trip-journal-508221.iam.gserviceaccount.com
+  #   - 1 CPU, 512Mi memory, max 4 instances, concurrency 80, startup CPU boost
+  # To inspect: gcloud run services describe memotrip --region=europe-west1
+  # Cloud Tasks queue (CLOUD_TASKS_QUEUE): me-central1/trip-build-queue,
+  #   maxAttempts 3 (each attempt re-runs a whole pipeline incl. Gemini) and
+  #   maxConcurrentDispatches 8 (~2 heavy pipelines per 512Mi instance x 4).
+  #   gcloud tasks queues describe trip-build-queue --location=me-central1
   - id: deploy
     name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud
@@ -35,6 +52,27 @@ steps:
       - --image=europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/memotrip:$SHORT_SHA
       - --region=europe-west1
       - --project=$PROJECT_ID
+      # background work runs inside the Cloud Tasks request; matches
+      # TASK_DEADLINE_S in tasks.py (Cloud Tasks' 30-minute maximum)
+      - --timeout=1800
+
+  # The background-pipeline service (see deploy/memotrip-worker.yaml for what
+  # it is and how it was created) gets the same image. Only its image changes
+  # here - its sizing/secrets live on the service. Skipped while the service
+  # doesn't exist yet, so this never creates a half-configured worker.
+  - id: deploy-worker
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        if gcloud run services describe memotrip-worker --region=europe-west1 --project=$PROJECT_ID >/dev/null 2>&1; then
+          gcloud run deploy memotrip-worker \
+            --image=europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/memotrip:$SHORT_SHA \
+            --region=europe-west1 --project=$PROJECT_ID
+        else
+          echo "memotrip-worker does not exist yet - skipping (create it from deploy/memotrip-worker.yaml)"
+        fi
 
 images:
   - europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/memotrip:$SHORT_SHA

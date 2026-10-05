@@ -175,3 +175,49 @@ def test_photos_finish_without_picker_sid_is_rejected_before_touching_quota(clie
         assert r.status_code == 303
     r = client.post("/trips", data={"description": "x"}, follow_redirects=False)
     assert r.status_code == 429
+
+
+# ------------------------------------------------------------------- per-IP cap
+
+
+def test_ip_cap_stops_a_guest_who_keeps_clearing_cookies(client):
+    ip = "203.0.113.7"
+    # every generation from a fresh guest identity, as if cookies were cleared each time
+    for i in range(webapp.IP_DAILY_GENERATION_LIMIT):
+        assert webapp.quota_exceeded(f"guest:new-{i}", ip) is False
+        webapp.record_generation(f"guest:new-{i}", ip)
+    assert webapp.quota_exceeded("guest:yet-another", ip) is True
+
+
+def test_ip_cap_does_not_touch_other_networks(client):
+    for i in range(webapp.IP_DAILY_GENERATION_LIMIT):
+        webapp.record_generation(f"guest:n{i}", "203.0.113.7")
+    assert webapp.quota_exceeded("guest:elsewhere", "198.51.100.2") is False
+
+
+def test_identity_cap_still_applies_below_the_ip_cap(client):
+    for _ in range(webapp.DAILY_GENERATION_LIMIT):
+        webapp.record_generation("guest:same", "203.0.113.7")
+    assert webapp.quota_exceeded("guest:same", "203.0.113.7") is True
+
+
+def test_client_ip_uses_the_last_forwarded_address():
+    # the client can prepend whatever it likes; the front end appends the real one
+    req = type("R", (), {"headers": {"x-forwarded-for": "1.2.3.4, 203.0.113.7"}, "client": None})
+    assert webapp.client_ip(req) == "203.0.113.7"
+
+
+def test_client_ip_falls_back_to_the_socket_address_locally():
+    client = type("C", (), {"host": "127.0.0.1"})
+    req = type("R", (), {"headers": {}, "client": client})
+    assert webapp.client_ip(req) == "127.0.0.1"
+
+
+def test_creating_trips_is_capped_per_ip_across_guest_sessions(client, monkeypatch):
+    monkeypatch.setattr(webapp, "IP_DAILY_GENERATION_LIMIT", 2)
+    headers = {"x-forwarded-for": "203.0.113.9"}
+    for _ in range(2):
+        r = _second_client().post("/trips", data={"description": "d"}, headers=headers)
+        assert r.status_code != 429
+    r = _second_client().post("/trips", data={"description": "d"}, headers=headers)
+    assert r.status_code == 429

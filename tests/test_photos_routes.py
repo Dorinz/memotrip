@@ -219,6 +219,19 @@ def test_trip_photos_finish_enqueues_when_picker_sid_present(client, monkeypatch
     assert calls == [("photos", tid)]
 
 
+def test_trip_photos_finish_flips_status_to_running_before_responding(client, monkeypatch):
+    # trip.html polls right after finish returns; a still-"ready" status there
+    # made it stop polling and never show the re-picked photos
+    monkeypatch.setattr(webapp.tasks, "enqueue", lambda kind, tid: None)
+    r = client.post("/trips", data={"description": "x"}, follow_redirects=False)
+    tid = r.headers["location"].rsplit("/", 1)[-1]
+    webapp.update(tid, status="ready", stage="הושלם", picker_sid="sid1")
+    r = client.post(f"/trips/{tid}/photos/finish")
+    assert r.status_code == 200
+    s = client.get(f"/trips/{tid}/status").json()
+    assert s["status"] == "running"
+
+
 def test_trip_photos_start_not_connected_returns_401(client, monkeypatch):
     monkeypatch.setattr(
         fetch_photos,
@@ -296,3 +309,118 @@ def test_internal_task_build_route_rejects_without_auth_when_queue_configured(cl
     monkeypatch.setattr(config, "CLOUD_TASKS_QUEUE", "projects/p/locations/l/queues/q")
     r = client.post("/internal/tasks/build/trip123")
     assert r.status_code == 403
+
+
+# ------------------------------------------------------- download + select session lifecycle
+
+
+def _stub_photo_flow(monkeypatch, tmp_path):
+    monkeypatch.setattr(webapp, "trip_dir", lambda tid: tmp_path / tid)
+    monkeypatch.setattr(webapp, "update", lambda *a, **k: None)
+    monkeypatch.setattr(webapp, "logline", lambda *a, **k: None)
+    monkeypatch.setattr(webapp.build_trip, "build", lambda spec, tpl: "<html></html>")
+    (tmp_path / "t1").mkdir()
+    (tmp_path / "t1" / "spec.json").write_text('{"timeline": []}', encoding="utf-8")
+
+
+def test_download_and_select_downloads_small_and_closes_the_session(client, monkeypatch, tmp_path):
+    _stub_photo_flow(monkeypatch, tmp_path)
+    calls = []
+
+    def collect(http, sid, out, size, keep_session=False):
+        calls.append(("collect", size, keep_session))
+        return []
+
+    def select(tid, spec, http=None):
+        calls.append(("select", http))
+
+    monkeypatch.setattr(webapp.fetch_photos, "collect", collect)
+    monkeypatch.setattr(webapp, "_select_from_local_photos", select)
+    monkeypatch.setattr(
+        webapp.fetch_photos, "close_session", lambda http, sid: calls.append(("close", sid))
+    )
+    http = object()
+
+    webapp._download_and_select("t1", http, "sid-1")
+
+    assert calls == [("collect", webapp.ANALYSIS_PX, True), ("select", http), ("close", "sid-1")]
+
+
+def test_download_and_select_closes_the_session_even_when_selection_fails(
+    client, monkeypatch, tmp_path
+):
+    _stub_photo_flow(monkeypatch, tmp_path)
+    closed = []
+
+    def boom(*a, **k):
+        raise RuntimeError("selection failed")
+
+    monkeypatch.setattr(webapp.fetch_photos, "collect", lambda *a, **k: [])
+    monkeypatch.setattr(webapp, "_select_from_local_photos", boom)
+    monkeypatch.setattr(webapp.fetch_photos, "close_session", lambda http, sid: closed.append(sid))
+
+    with pytest.raises(RuntimeError):
+        webapp._download_and_select("t1", object(), "sid-1")
+    assert closed == ["sid-1"]
+
+
+# ------------------------------------------------------- Cloud Tasks retry of a finished task
+
+
+def _trip_with_status(tid, status):
+    with webapp.db() as c:
+        c.execute("INSERT INTO trips(id, status) VALUES(?, ?)", (tid, status))
+
+
+def _no_queue(monkeypatch):
+    monkeypatch.setattr(config, "CLOUD_TASKS_QUEUE", None)  # no OIDC check in tests
+
+
+@pytest.mark.parametrize("status", ["ready", "error"])
+def test_a_retry_of_a_finished_build_is_skipped(client, monkeypatch, status):
+    _no_queue(monkeypatch)
+    _trip_with_status("t-done", status)
+    calls = []
+    monkeypatch.setattr(webapp, "run_build", lambda tid: calls.append(tid))
+    r = client.post("/internal/tasks/build/t-done", headers={"X-CloudTasks-TaskRetryCount": "1"})
+    assert r.json() == {"ok": True, "skipped": True}
+    assert calls == []
+
+
+def test_a_retry_of_a_build_that_died_mid_way_runs_again(client, monkeypatch):
+    _no_queue(monkeypatch)
+    _trip_with_status("t-stuck", "running")
+    calls = []
+    monkeypatch.setattr(webapp, "run_build", lambda tid: calls.append(tid))
+    client.post("/internal/tasks/build/t-stuck", headers={"X-CloudTasks-TaskRetryCount": "2"})
+    assert calls == ["t-stuck"]
+
+
+def test_a_first_delivery_always_runs_even_for_a_finished_trip(client, monkeypatch):
+    # e.g. the user pressed "rerun" on a ready trip
+    _no_queue(monkeypatch)
+    _trip_with_status("t-rerun", "ready")
+    calls = []
+    monkeypatch.setattr(webapp, "run_build", lambda tid: calls.append(tid))
+    client.post("/internal/tasks/build/t-rerun", headers={"X-CloudTasks-TaskRetryCount": "0"})
+    assert calls == ["t-rerun"]
+
+
+def test_a_retry_of_a_finished_photo_pick_is_skipped(client, monkeypatch):
+    _no_queue(monkeypatch)
+    _trip_with_status("t-photos", "ready")
+    calls = []
+    monkeypatch.setattr(webapp, "run_photos", lambda tid: calls.append(tid))
+    client.post("/internal/tasks/photos/t-photos", headers={"X-CloudTasks-TaskRetryCount": "1"})
+    assert calls == []
+
+
+def test_internal_task_checks_the_token_was_minted_for_the_worker_url(client, monkeypatch):
+    monkeypatch.setattr(config, "CLOUD_TASKS_QUEUE", "projects/p/locations/l/queues/q")
+    monkeypatch.setattr(config, "PUBLIC_BASE_URL", "https://memotrip.app")
+    monkeypatch.setattr(config, "TASKS_TARGET_URL", "https://memotrip-worker.run.app")
+    seen = []
+    monkeypatch.setattr(webapp, "_verify_task_auth", lambda auth, aud: seen.append(aud))
+    monkeypatch.setattr(webapp, "run_build", lambda tid: None)
+    client.post("/internal/tasks/build/t1")
+    assert seen == ["https://memotrip-worker.run.app/internal/tasks/build/t1"]

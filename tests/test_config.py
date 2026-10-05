@@ -25,6 +25,7 @@ def reload_config(monkeypatch):
     yield _reload
     for var in (
         "PUBLIC_BASE_URL",
+        "TASKS_TARGET_URL",
         "DATABASE_URL",
         "CLOUD_TASKS_QUEUE",
         "TASKS_INVOKER_SA",
@@ -74,3 +75,17 @@ def test_oauth_web_client_path_override(monkeypatch, reload_config):
     cfg = reload_config()
 
     assert cfg.OAUTH_WEB_CLIENT_PATH == pathlib.Path("/secrets/creds.json")
+
+
+def test_tasks_target_defaults_to_the_public_base_url(monkeypatch, reload_config):
+    monkeypatch.setenv("PUBLIC_BASE_URL", "https://memotrip.app")
+    monkeypatch.delenv("TASKS_TARGET_URL", raising=False)
+    assert reload_config().TASKS_TARGET_URL == "https://memotrip.app"
+
+
+def test_tasks_target_can_point_at_a_separate_worker(monkeypatch, reload_config):
+    monkeypatch.setenv("PUBLIC_BASE_URL", "https://memotrip.app")
+    monkeypatch.setenv("TASKS_TARGET_URL", "https://memotrip-worker.run.app")
+    cfg = reload_config()
+    assert cfg.TASKS_TARGET_URL == "https://memotrip-worker.run.app"
+    assert cfg.PUBLIC_BASE_URL == "https://memotrip.app"

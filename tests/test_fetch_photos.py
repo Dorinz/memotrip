@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import datetime
 import json
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -307,3 +308,157 @@ def test_download_writes_a_manifest_file(tmp_path, monkeypatch):
     manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["downscale_px"] == 800
     assert manifest["count"] == 1
+
+
+def _photo_item(id_, url=None):
+    return {
+        "type": "PHOTO",
+        "id": id_,
+        "createTime": "2026-08-01T10:00:00Z",
+        "mediaFile": {
+            "baseUrl": url or f"https://example.com/{id_}",
+            "filename": f"{id_}.jpg",
+            "mediaFileMetadata": {},
+        },
+    }
+
+
+def test_download_runs_in_parallel_and_keeps_pick_order(tmp_path, monkeypatch):
+    import threading
+
+    monkeypatch.setattr(fp, "_ok", lambda r: r)
+    lock = threading.Lock()
+    state = {"now": 0, "peak": 0}
+
+    class FakeHttp:
+        def get(self, url):
+            with lock:
+                state["now"] += 1
+                state["peak"] = max(state["peak"], state["now"])
+            time.sleep(0.05)
+            with lock:
+                state["now"] -= 1
+            return SimpleNamespace(content=url.encode(), ok=True)
+
+    items = [_photo_item(f"p{i}") for i in range(16)]
+    manifest = fp.download(FakeHttp(), items, tmp_path, 1600, workers=8)
+    assert [m["id"] for m in manifest] == [f"p{i}" for i in range(16)]
+    assert state["peak"] > 1
+    assert (tmp_path / "p3.jpg").read_bytes() == b"https://example.com/p3=w1600-h1600"
+
+
+def test_download_retries_a_transient_failure(tmp_path, monkeypatch):
+    monkeypatch.setattr(fp, "_ok", lambda r: r)
+    monkeypatch.setattr(fp.time, "sleep", lambda s: None)
+    calls = {"n": 0}
+
+    class FakeHttp:
+        def get(self, url):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise ConnectionError("reset")
+            return SimpleNamespace(content=b"ok", ok=True)
+
+    manifest = fp.download(FakeHttp(), [_photo_item("a")], tmp_path, 1600)
+    assert len(manifest) == 1
+    assert calls["n"] == 2
+
+
+def test_download_skips_a_photo_that_keeps_failing(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(fp, "_ok", lambda r: r)
+    monkeypatch.setattr(fp.time, "sleep", lambda s: None)
+
+    class FakeHttp:
+        def get(self, url):
+            if "bad" in url:
+                raise ConnectionError("down")
+            return SimpleNamespace(content=b"ok", ok=True)
+
+    items = [_photo_item("good1"), _photo_item("bad"), _photo_item("good2")]
+    manifest = fp.download(FakeHttp(), items, tmp_path, 1600)
+    assert [m["id"] for m in manifest] == ["good1", "good2"]
+    saved = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    assert saved["count"] == 2
+    assert "1 photo(s) could not be downloaded" in capsys.readouterr().err
+
+
+# ----------------------------------------------------------------- two-size download
+
+
+def test_download_keeps_each_photos_base_url_for_a_later_upgrade(tmp_path, monkeypatch):
+    monkeypatch.setattr(fp, "_ok", lambda r: r)
+
+    class FakeHttp:
+        def get(self, url):
+            return SimpleNamespace(content=b"x", ok=True)
+
+    manifest = fp.download(FakeHttp(), [_photo_item("a")], tmp_path, 512)
+    assert manifest[0]["baseUrl"] == "https://example.com/a"
+
+
+def test_collect_keep_session_leaves_the_picker_session_open(tmp_path, monkeypatch):
+    deleted = []
+    monkeypatch.setattr(fp, "list_items", lambda http, sid: [])
+    monkeypatch.setattr(fp, "close_session", lambda http, sid: deleted.append(sid))
+    fp.collect(object(), "s1", tmp_path, 512, keep_session=True)
+    assert deleted == []
+    fp.collect(object(), "s2", tmp_path, 512)
+    assert deleted == ["s2"]
+
+
+def _manifest_with(tmp_path, *names):
+    items = [{"file": n, "baseUrl": f"https://example.com/{n}"} for n in names]
+    (tmp_path / "manifest.json").write_text(
+        json.dumps({"downscale_px": 512, "items": items}), encoding="utf-8"
+    )
+
+
+def test_upgrade_fetches_only_the_requested_photos_at_page_size(tmp_path, monkeypatch):
+    monkeypatch.setattr(fp, "_ok", lambda r: r)
+    urls = []
+
+    class FakeHttp:
+        def get(self, url):
+            urls.append(url)
+            return SimpleNamespace(content=b"big", ok=True)
+
+    _manifest_with(tmp_path, "a.jpg", "b.jpg", "c.jpg")
+    got = fp.upgrade(FakeHttp(), tmp_path, ["a.jpg", "c.jpg"], 1600)
+    assert sorted(urls) == [
+        "https://example.com/a.jpg=w1600-h1600",
+        "https://example.com/c.jpg=w1600-h1600",
+    ]
+    assert got == {"a.jpg": tmp_path / "full" / "a.jpg", "c.jpg": tmp_path / "full" / "c.jpg"}
+    saved = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    assert [it.get("full_file") for it in saved["items"]] == ["full/a.jpg", None, "full/c.jpg"]
+
+
+def test_upgrade_does_not_fetch_a_photo_twice(tmp_path, monkeypatch):
+    monkeypatch.setattr(fp, "_ok", lambda r: r)
+    calls = {"n": 0}
+
+    class FakeHttp:
+        def get(self, url):
+            calls["n"] += 1
+            return SimpleNamespace(content=b"big", ok=True)
+
+    _manifest_with(tmp_path, "a.jpg")
+    fp.upgrade(FakeHttp(), tmp_path, ["a.jpg"])
+    got = fp.upgrade(FakeHttp(), tmp_path, ["a.jpg"])
+    assert calls["n"] == 1
+    assert "a.jpg" in got
+
+
+def test_upgrade_leaves_out_a_photo_that_fails(tmp_path, monkeypatch):
+    monkeypatch.setattr(fp, "_ok", lambda r: r)
+    monkeypatch.setattr(fp.time, "sleep", lambda s: None)
+
+    class FakeHttp:
+        def get(self, url):
+            if "bad" in url:
+                raise ConnectionError("expired")
+            return SimpleNamespace(content=b"big", ok=True)
+
+    _manifest_with(tmp_path, "ok.jpg", "bad.jpg")
+    got = fp.upgrade(FakeHttp(), tmp_path, ["ok.jpg", "bad.jpg"])
+    assert list(got) == ["ok.jpg"]

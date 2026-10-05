@@ -17,6 +17,14 @@ import threading
 
 import config
 
+# How long Cloud Tasks waits for /internal/tasks/... to answer before calling
+# it failed (and retrying). The task runs inside that request - a photo pick
+# includes waiting for the user in the Picker, then downloading up to 2000
+# photos and a Gemini call per day - so this is Cloud Tasks' maximum for HTTP
+# targets (default would be 10 min). Must not exceed the Cloud Run service's
+# request timeout (--timeout in cloudbuild.deploy.yaml), which is set to match.
+TASK_DEADLINE_S = 1800
+
 
 def enqueue(kind: str, tid: str) -> None:
     """kind is "build" or "photos"."""
@@ -33,7 +41,7 @@ def _enqueue_cloud_task(kind: str, tid: str) -> None:
     from google.cloud import tasks_v2  # lazy import — only needed in prod mode
 
     client = tasks_v2.CloudTasksClient()
-    url = f"{config.PUBLIC_BASE_URL}/internal/tasks/{kind}/{tid}"
+    url = f"{config.TASKS_TARGET_URL}/internal/tasks/{kind}/{tid}"
     task = {
         "http_request": {
             "http_method": tasks_v2.HttpMethod.POST,
@@ -42,7 +50,8 @@ def _enqueue_cloud_task(kind: str, tid: str) -> None:
                 "service_account_email": config.TASKS_INVOKER_SA,
                 "audience": url,
             },
-        }
+        },
+        "dispatch_deadline": {"seconds": TASK_DEADLINE_S},
     }
     # CLOUD_TASKS_QUEUE must be the full queue resource name:
     # projects/<project>/locations/<region>/queues/<queue>

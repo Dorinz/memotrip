@@ -152,6 +152,11 @@ def _init_schema_sqlite() -> None:
         _c.execute(
             "CREATE INDEX IF NOT EXISTS idx_generations_identity_ts ON generations(identity, ts)"
         )
+        # the client IP of each generation - a second, per-network daily cap,
+        # since a guest identity resets by just clearing cookies
+        if "ip" not in {r["name"] for r in _c.execute("PRAGMA table_info(generations)")}:
+            _c.execute("ALTER TABLE generations ADD COLUMN ip TEXT")
+        _c.execute("CREATE INDEX IF NOT EXISTS idx_generations_ip_ts ON generations(ip, ts)")
 
 
 def _init_schema_pg() -> None:
@@ -190,3 +195,5 @@ def _init_schema_pg() -> None:
         _c.execute(
             "CREATE INDEX IF NOT EXISTS idx_generations_identity_ts ON generations(identity, ts)"
         )
+        _c.execute("ALTER TABLE generations ADD COLUMN IF NOT EXISTS ip TEXT")
+        _c.execute("CREATE INDEX IF NOT EXISTS idx_generations_ip_ts ON generations(ip, ts)")

@@ -28,10 +28,12 @@ import pathlib
 import re
 import secrets
 import shutil
+import threading
 import time
 import traceback
 import urllib.parse
 import uuid
+from contextlib import asynccontextmanager
 
 import html as _html
 
@@ -40,7 +42,7 @@ from zoneinfo import ZoneInfo
 import bcrypt
 import uvicorn
 from fastapi import FastAPI, Form, Header, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
@@ -60,18 +62,58 @@ ROOT = pathlib.Path(__file__).resolve().parent
 DATA = ROOT / "webapp_data"
 TEMPLATE = (ROOT / "trip_template.html").read_text(encoding="utf-8")
 MODEL = os.environ.get("TRIP_MODEL", "gemini-3.6-flash")
+# long edge of the copy downloaded for every picked photo - what scoring and the
+# Gemini thumbnails use anyway; page-size copies are fetched for the shortlist only
+ANALYSIS_PX = 512
 DATA.mkdir(exist_ok=True)
 
 # per-identity (see photo_owner_key) daily cap on Gemini-backed generation
 # actions - counted on the "day" as lived in Israel, this app's audience,
 # not server-local time or UTC.
 DAILY_GENERATION_LIMIT = 3
+# per client IP, across every identity on it: higher than the per-identity cap
+# because a home, office or mobile carrier can put several real people behind
+# one address - it only has to stop one person minting endless guest cookies
+IP_DAILY_GENERATION_LIMIT = 10
 ISRAEL_TZ = ZoneInfo("Asia/Jerusalem")
 QUOTA_MESSAGE = "אוף :( כבר ניצלת את המכסה היומית שלך, נסה שוב מאוחר יותר."
 
-app = FastAPI(title="MemoTrip")
-app.mount("/data", StaticFiles(directory=str(DATA)), name="data")
+
+@asynccontextmanager
+async def _lifespan(app):
+    # Cloud Run instances are short-lived, so the purge at startup does most of
+    # the work; the loop covers a long-lived local server
+    threading.Thread(target=_purge_loop, daemon=True).start()
+    yield
+
+
+app = FastAPI(title="MemoTrip", lifespan=_lifespan)
 app.mount("/static", StaticFiles(directory=str(ROOT / "static")), name="static")
+
+# Public surface of a trip = its finished page and the photos that page shows,
+# nothing else: the uploaded docs (booking codes, hosts), the downloaded album
+# (gphotos/) and spec.json stay private even to someone holding the link.
+_TID_RE = re.compile(r"[0-9a-f]{32}")
+_PAGE_IMAGE_RE = re.compile(r"[\w.-]+\.jpg")
+PAGE_IMAGE_DIRS = ("trips", "lodging")  # lodging: only on pages built before it was dropped
+
+
+@app.get("/data/{tid}/page.html")
+def trip_page(tid: str):
+    f = trip_dir(tid) / "page.html" if _TID_RE.fullmatch(tid) else None
+    if not (f and f.is_file()):
+        raise HTTPException(404)
+    return FileResponse(f, media_type="text/html; charset=utf-8")
+
+
+@app.get("/data/{tid}/images/{kind}/{name}")
+def trip_page_image(tid: str, kind: str, name: str):
+    ok = _TID_RE.fullmatch(tid) and kind in PAGE_IMAGE_DIRS and _PAGE_IMAGE_RE.fullmatch(name)
+    f = trip_dir(tid) / "images" / kind / name if ok else None
+    if not (f and f.is_file()):
+        raise HTTPException(404)
+    return FileResponse(f, media_type="image/jpeg")
+
 
 # session cookie signing key - generated once, persisted locally (gitignored)
 # so logins survive a restart; SESSION_SECRET in .env overrides it if set.
@@ -115,6 +157,44 @@ _db.init_schema()
 
 def trip_dir(tid: str) -> pathlib.Path:
     return DATA / tid
+
+
+# The downloaded album (gphotos/: every photo at 512px + the shortlist at 1600px)
+# exists only so "rerun" can re-pick without going back to Google Photos. After
+# this many days it's deleted; a rerun after that needs a fresh photo pick. The
+# page's own photos are separate copies (images/trips/) and are never touched.
+PHOTO_RETENTION_DAYS = 30
+PURGE_EVERY_S = 6 * 3600
+
+
+def purge_expired_photos(now: float | None = None, log=print) -> list[str]:
+    """Delete gphotos/ of every trip whose album was downloaded more than
+    PHOTO_RETENTION_DAYS ago (by manifest.json's mtime). Returns the trip ids."""
+    cutoff = (now if now is not None else time.time()) - PHOTO_RETENTION_DAYS * 86400
+    purged = []
+    for d in DATA.iterdir() if DATA.is_dir() else []:
+        g = d / "gphotos"
+        manifest = g / "manifest.json"
+        # only ever a real trip folder's own gphotos/ - never a path built from
+        # something that could be empty (see the webapp_data rmtree incident)
+        if not (_TID_RE.fullmatch(d.name) and g.parent == trip_dir(d.name) and manifest.is_file()):
+            continue
+        if manifest.stat().st_mtime < cutoff:
+            shutil.rmtree(g, ignore_errors=True)
+            purged.append(d.name)
+            log(
+                f"[{d.name[:8]}] downloaded photos older than {PHOTO_RETENTION_DAYS} days - removed"
+            )
+    return purged
+
+
+def _purge_loop():
+    while True:
+        try:
+            purge_expired_photos()
+        except Exception as e:
+            print(f"photo purge failed: {e}")
+        time.sleep(PURGE_EVERY_S)
 
 
 def get_trip(tid: str):
@@ -213,24 +293,44 @@ def _israel_day_bounds_utc(now_utc: dt.datetime | None = None) -> tuple[str, str
     )
 
 
-def quota_exceeded(identity: str) -> bool:
+def client_ip(request: Request) -> str:
+    """The caller's IP. On Cloud Run, Google's front end appends the address it
+    actually received the connection from to X-Forwarded-For, so the LAST entry
+    is the real one - anything before it could have been sent by the client to
+    dodge the per-IP cap. Locally there is no such header."""
+    xff = request.headers.get("x-forwarded-for", "")
+    last = xff.split(",")[-1].strip() if xff else ""
+    return last or (request.client.host if request.client else "") or "unknown"
+
+
+def quota_exceeded(identity: str, ip: str | None = None) -> bool:
     """True once `identity` (see photo_owner_key) has hit today's
     (Israel-time) cap on Gemini-backed generation actions: a new trip, a
-    rerun, or finishing a photo pick - each burns real API calls."""
+    rerun, or finishing a photo pick - each burns real API calls. With `ip`,
+    also once that network has hit its own cap: a guest identity is just a
+    cookie, so clearing it would otherwise reset the identity cap forever."""
     start, end = _israel_day_bounds_utc()
     with db() as c:
         row = c.execute(
             "SELECT COUNT(*) AS n FROM generations WHERE identity=? AND ts>=? AND ts<?",
             (identity, start, end),
         ).fetchone()
-    return row["n"] >= DAILY_GENERATION_LIMIT
+        if row["n"] >= DAILY_GENERATION_LIMIT:
+            return True
+        if ip:
+            row = c.execute(
+                "SELECT COUNT(*) AS n FROM generations WHERE ip=? AND ts>=? AND ts<?",
+                (ip, start, end),
+            ).fetchone()
+            return row["n"] >= IP_DAILY_GENERATION_LIMIT
+    return False
 
 
-def record_generation(identity: str) -> None:
+def record_generation(identity: str, ip: str | None = None) -> None:
     with db() as c:
         c.execute(
-            "INSERT INTO generations(identity, ts) VALUES(?,?)",
-            (identity, dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")),
+            "INSERT INTO generations(identity, ts, ip) VALUES(?,?,?)",
+            (identity, dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M:%S"), ip),
         )
 
 
@@ -280,7 +380,6 @@ def run_build(tid: str):
         )
 
         spec = parse_docs.assemble(ai, rx)
-        spec.setdefault("meta", {}).setdefault("tz_offset_hours", 0)
         for it in spec["timeline"]:
             if it.get("type") in ("stay", "layover") and it.get("key"):
                 spec.setdefault("photos", {}).setdefault(it["key"], {"lodging": [], "trip": []})
@@ -327,6 +426,12 @@ def run_build(tid: str):
         if (trip_dir(tid) / "gphotos" / "manifest.json").is_file():
             update(tid, stage="בוחר את התמונות הכי טובות")
             _select_from_local_photos(tid, spec)
+        else:
+            # downloaded photos expired (or never existed): keep the photos the
+            # page already shows - choosing different ones needs a fresh pick
+            kept = _carry_over_page_photos(tid, spec)
+            if kept:
+                logline(tid, f"kept the page's {kept} existing photo(s)")
 
         update(tid, stage="בונה את דף המסע")
         (trip_dir(tid) / "spec.json").write_bytes(
@@ -389,19 +494,62 @@ def _wait_for_pick(sid: str, http, timeout_s: float) -> bool:
     return False
 
 
-def _select_from_local_photos(tid: str, spec: dict) -> None:
+def _carry_over_page_photos(tid: str, new_spec: dict) -> int:
+    """Copy the photo choices of the trip's current spec.json onto a freshly
+    rebuilt spec: each day's photos by calendar date, a layover's by key, and the
+    hero. Only paths whose file still exists. Returns how many were kept."""
+    try:
+        old = json.loads((trip_dir(tid) / "spec.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return 0
+
+    def existing(paths):
+        return [p for p in paths or [] if (trip_dir(tid) / p).is_file()]
+
+    by_date = {
+        it["date"]: existing(it.get("tripPhotos"))
+        for it in old.get("timeline", [])
+        if it.get("type") == "day" and it.get("date")
+    }
+    kept = 0
+    for it in new_spec.get("timeline", []):
+        if it.get("type") == "day" and by_date.get(it.get("date")):
+            it["tripPhotos"] = by_date[it["date"]]
+            kept += len(it["tripPhotos"])
+    for key, media in (old.get("photos") or {}).items():
+        trip = existing(media.get("trip"))
+        if trip and key in (new_spec.get("photos") or {}):
+            new_spec["photos"][key]["trip"] = trip
+            kept += len(trip)
+    hero = existing((old.get("hero") or {}).get("photos"))
+    if hero:
+        new_spec.setdefault("hero", {})["photos"] = hero
+        kept += len(hero)
+    return kept
+
+
+def _select_from_local_photos(tid: str, spec: dict, http=None) -> None:
     """(Re-)run photo selection against whatever's already downloaded in
     gphotos/ - shared by the first download and every later rerun, so the
-    user is never sent back to the Google Photos picker just to rebuild."""
+    user is never sent back to the Google Photos picker just to rebuild.
+    With `http` (the Picker session still open) the shortlisted photos' page-size
+    copies are fetched; a rerun has none, and reuses the ones fetched then."""
     key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
     gdir = trip_dir(tid) / "gphotos"
     photos = select_photos.load_photos("picker", manifest=gdir / "manifest.json", media_dir=gdir)
+
+    def fetch_full(need):
+        got = fetch_photos.upgrade(http, gdir, [p.path.name for p in need], select_photos.PAGE_PX)
+        for p in need:
+            p.full_path = got.get(p.path.name)
+
     select_photos.select(
         photos,
         spec,
         trip_dir(tid) / "images" / "trips",
         use_ai=bool(key),
         model=MODEL,
+        fetch_full=fetch_full if http is not None else None,
         log=lambda m: logline(tid, m),
     )
 
@@ -409,12 +557,17 @@ def _select_from_local_photos(tid: str, spec: dict) -> None:
 def _download_and_select(tid: str, http, sid: str):
     update(tid, stage="מוריד את התמונות")
     gdir = trip_dir(tid) / "gphotos"
-    manifest = fetch_photos.collect(http, sid, gdir, 1600)
-    logline(tid, f"downloaded {len(manifest)} photo(s)")
+    try:
+        # everything small (enough for scoring + Gemini); only the shortlist is
+        # fetched again at page size, inside select - so the session stays open
+        manifest = fetch_photos.collect(http, sid, gdir, ANALYSIS_PX, keep_session=True)
+        logline(tid, f"downloaded {len(manifest)} photo(s)")
 
-    update(tid, stage="בוחר את התמונות הכי טובות")
-    spec = json.loads((trip_dir(tid) / "spec.json").read_text(encoding="utf-8"))
-    _select_from_local_photos(tid, spec)
+        update(tid, stage="בוחר את התמונות הכי טובות")
+        spec = json.loads((trip_dir(tid) / "spec.json").read_text(encoding="utf-8"))
+        _select_from_local_photos(tid, spec, http)
+    finally:
+        fetch_photos.close_session(http, sid)
 
     (trip_dir(tid) / "spec.json").write_bytes(
         (json.dumps(spec, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
@@ -839,7 +992,7 @@ async def create(
     docs: list[UploadFile] = None,
 ):
     identity = photo_owner_key(request)
-    if quota_exceeded(identity):
+    if quota_exceeded(identity, client_ip(request)):
         return JSONResponse({"error": QUOTA_MESSAGE}, status_code=429)
     tid = uuid.uuid4().hex
     d = trip_dir(tid)
@@ -876,7 +1029,7 @@ async def create(
                 identity,
             ),
         )
-    record_generation(identity)
+    record_generation(identity, client_ip(request))
     tasks.enqueue("build", tid)
     return RedirectResponse(f"/trips/{tid}", status_code=303)
 
@@ -926,9 +1079,14 @@ def photos_finish(tid: str, request: Request):
     if not get_trip(tid)["picker_sid"]:
         return JSONResponse({"error": "start the picker first"}, status_code=400)
     identity = photo_owner_key(request)
-    if quota_exceeded(identity):
+    if quota_exceeded(identity, client_ip(request)):
         return JSONResponse({"error": QUOTA_MESSAGE}, status_code=429)
-    record_generation(identity)
+    record_generation(identity, client_ip(request))
+    # flip the status before returning, not inside run_photos: trip.html polls
+    # right after this responds, and a still-"ready" status there makes it
+    # re-show the old page and stop polling for good - so the new photos
+    # would never appear without a manual reload.
+    update(tid, status="running", stage="ממתין לבחירת התמונות", error=None)
     tasks.enqueue("photos", tid)
     return {"ok": True}
 
@@ -936,13 +1094,13 @@ def photos_finish(tid: str, request: Request):
 @app.post("/trips/{tid}/rerun")
 def rerun(tid: str, request: Request):
     identity = photo_owner_key(request)
-    if quota_exceeded(identity):
+    if quota_exceeded(identity, client_ip(request)):
         # a plain HTML <form> posts here (full navigation, no fetch/JSON on
         # the client) - reuse the trip's own error field so trip.html's
         # existing status-poll banner shows it, same as a real build error.
         update(tid, error=QUOTA_MESSAGE)
         return RedirectResponse(f"/trips/{tid}", status_code=303)
-    record_generation(identity)
+    record_generation(identity, client_ip(request))
     tasks.enqueue("build", tid)
     return RedirectResponse(f"/trips/{tid}", status_code=303)
 
@@ -1025,20 +1183,50 @@ def _verify_task_auth(authorization: str, expected_audience: str) -> None:
         raise HTTPException(status_code=403, detail="unexpected invoker")
 
 
+def _already_finished(tid: str, retry_count: str) -> bool:
+    """True when this Cloud Tasks delivery is a retry of a task that actually
+    finished. Cloud Tasks retries whenever it didn't get the answer - including
+    when the work completed but the response was lost (dropped connection,
+    instance shut down right after) - and re-running would pay Gemini again
+    and swap the page's photos under the user. A previous attempt that really
+    died mid-way leaves the trip "running", so that one is still retried. A
+    first delivery (count 0, e.g. a rerun the user asked for) always runs."""
+    try:
+        retry = int(retry_count or 0)
+    except ValueError:
+        retry = 0
+    row = get_trip(tid)
+    return retry > 0 and bool(row) and row["status"] in ("ready", "error")
+
+
 @app.post("/internal/tasks/build/{tid}")
-def internal_task_build(tid: str, authorization: str = Header(default="")):
+def internal_task_build(
+    tid: str,
+    authorization: str = Header(default=""),
+    x_cloudtasks_taskretrycount: str = Header(default="0"),
+):
     # audience is recomputed from config, not read off the request: behind
     # Cloud Run's proxy, request.url can report scheme/host differently from
     # the public https URL Cloud Tasks actually signed the OIDC token for,
     # which made this check fail with a 403 for every dispatch.
-    _verify_task_auth(authorization, f"{config.PUBLIC_BASE_URL}/internal/tasks/build/{tid}")
+    _verify_task_auth(authorization, f"{config.TASKS_TARGET_URL}/internal/tasks/build/{tid}")
+    if _already_finished(tid, x_cloudtasks_taskretrycount):
+        print(f"[{tid[:8]}] build retry skipped - the previous attempt already finished")
+        return {"ok": True, "skipped": True}
     run_build(tid)
     return {"ok": True}
 
 
 @app.post("/internal/tasks/photos/{tid}")
-def internal_task_photos(tid: str, authorization: str = Header(default="")):
-    _verify_task_auth(authorization, f"{config.PUBLIC_BASE_URL}/internal/tasks/photos/{tid}")
+def internal_task_photos(
+    tid: str,
+    authorization: str = Header(default=""),
+    x_cloudtasks_taskretrycount: str = Header(default="0"),
+):
+    _verify_task_auth(authorization, f"{config.TASKS_TARGET_URL}/internal/tasks/photos/{tid}")
+    if _already_finished(tid, x_cloudtasks_taskretrycount):
+        print(f"[{tid[:8]}] photos retry skipped - the previous attempt already finished")
+        return {"ok": True, "skipped": True}
     run_photos(tid)
     return {"ok": True}
 

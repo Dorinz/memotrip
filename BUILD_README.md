@@ -63,7 +63,7 @@ the previously-missing transit + stay both appear.
 
 ## trip_spec.json shape
 
-- `meta` — `title`, `tz_offset_hours`
+- `meta` — `title`
 - `hero` — `eyebrow`, `h1` (may contain `<em>`), `sub` (may contain `<br>`), `region`
   (2-4 words naming just the overall destination, e.g. "the Azores islands" —
   general, not an itinerary detail; shown on `trip_template.html`'s hero "featured"
@@ -78,7 +78,9 @@ the previously-missing transit + stay both appear.
   data in logistics docs) — the whole section is dropped when it's absent; add it
   by hand if you want a cost breakdown.
 - `locations` — `{key: {lat, lon, label}}`
-- `photos` — `{stayKey: {lodging: [path], trip: [path]}}` — `lodging` only; a
+- `photos` — `{stayKey: {lodging: [path], trip: [path]}}` — `lodging` is never
+  filled from the album (lodging photos would come from the booking page, not
+  the user's trip photos; when there are none the page hides that gallery); a
   `day` item's own trip photos live on the item itself (`tripPhotos`, see below),
   `photos[key]["trip"]` is used only by `layover` items.
 - `timeline[]` — ordered items. **One section per calendar day** (`type:"day"`),
@@ -126,6 +128,19 @@ Opens a Google page; you tick the trip photos (or the whole album) and hit Done.
 Downloads a **downscaled copy** of each — `--size` px long edge, never the
 original — into `gphotos/`, plus `gphotos/manifest.json`
 (`downscale_px`, and per item: `id, file, createTime, orig_width, orig_height`).
+Downloads run 8 at a time (`DOWNLOAD_WORKERS`), each retried up to 3 times; a
+photo that still fails is skipped and reported instead of failing the whole run.
+
+**Two sizes (webapp):** `webapp.py` downloads every picked photo at only 512px
+(`ANALYSIS_PX` — all that scoring and the Gemini thumbnails use) and keeps the
+Picker session open; `select_photos.select()` then builds every day's shortlist
+plus the hero pool and calls `fetch_photos.upgrade()` once to fetch just those at
+1600px into `gphotos/full/` (recorded as `full_file` in the manifest; each
+item's `baseUrl` is kept there for this, valid only while the session is open).
+The session is closed afterwards. A later rerun reproduces the same shortlists
+from the same 512px files, so it always finds their 1600px copies already on
+disk. The standalone CLI still downloads at `--size` (1600) in one go, since
+`select_photos.py` runs after the session is gone.
 The downscaled copies feed both the Gemini triage and the final page, so there's
 no second download. Token cached in `token.json`. Picker `baseUrl`s expire with
 the session, so run `select_photos.py` in the same sitting.
@@ -148,18 +163,28 @@ python select_photos.py --source folder --folder ./album --dry-run
 
 What it does: one target per **calendar day** — a `day` item (exact `date`) or
 a `layover` (its `dateRange[0]`); since the spec is already day-expanded, dates
-never overlap, so each photo buckets to exactly one day. Scores sharpness/exposure,
-drops near-duplicates (dHash), then picks `--per-region` (default 3, min
-`--min` 2) that are sharp and visually varied for that day's `tripPhotos`. On a
-check-in day it also picks `--lodging-count` (default 2) more from the same
-day's pool (excluding whatever was just picked) into `photos[key]["lodging"]`.
+never overlap, so each photo buckets to exactly one day.
+
+Days are **local** days at the place we were: each target gets the IANA time
+zone of its `city` (looked up in `locations` by label, coordinate -> zone via
+`timezonefinder`, offline), and a photo goes to the day whose local
+midnight-to-midnight window contains the moment it was taken — so a multi-zone
+trip (Tel Aviv -> Lisbon -> Azores) buckets each leg in its own zone. The
+photo's time comes only from its metadata: the Picker's `createTime` (UTC; the
+downscaled download carries no EXIF), or for `--source folder` the EXIF
+`DateTimeOriginal` (+ `OffsetTimeOriginal` when the camera wrote one; without it
+the wall-clock time is taken as already local). No EXIF time -> the photo is
+skipped, never guessed from the file's mtime.
+
+Scores sharpness/exposure, drops near-duplicates (dHash), then picks
+`--per-region` (default 3, min `--min` 2) that are sharp and visually varied
+for that day's `tripPhotos`. Lodging photos are **not** picked from the album.
 With `GEMINI_API_KEY` in the environment it asks `--model` (default
 `gemini-3.6-flash`) to make each pick from the candidates; otherwise (or if the
 call fails, e.g. a quota 429) a deterministic quality+diversity picker.
 Chosen photos are re-saved (`--max-px` 1600, JPEG q82, metadata stripped) into
-`images/trips/<dayId>-N.jpg` (dayId like `capelas-d2`) and `images/lodging/<key>-N.jpg`,
-written onto the `day` item's `tripPhotos` (or `photos[key]["trip"]` for a
-`layover`) and `photos[key]["lodging"]`.
+`images/trips/<dayId>-N.jpg` (dayId like `capelas-d2`), written onto the `day`
+item's `tripPhotos` (or `photos[key]["trip"]` for a `layover`).
 
 Separately (once per run, not per-day): also picks the **2 best scenery shots
 from the whole trip** — the same quality-scored pool as above, but judged for
@@ -172,14 +197,13 @@ a hero pick still shows up again in its own day's gallery). Written to
 Then run `build_trip.py`.
 
 Knobs: `--per-region --min --candidates --dupe-distance --spread-distance
---blur-min --max-px --tz-offset --no-ai --lodging-count --lodging-dir
---images-dir --clean-source --dry-run`. `--clean-source` deletes the media
-folder after a successful run. `tz-offset` (hours added to the photo's UTC
-time before taking the date) defaults to `meta.tz_offset_hours` in the spec.
+--blur-min --max-px --no-ai --images-dir --clean-source --dry-run`.
+`--clean-source` deletes the media folder after a successful run.
 
 Needs in the spec: it must already be day-expanded (`parse_docs.assemble()`
 followed by `parse_docs.expand_days()` — the CLI and `run_build()` in
-`webapp.py` both do this automatically) and `meta.tz_offset_hours`.
+`webapp.py` both do this automatically), and `locations` with coordinates for
+each day's city (if none resolve, it falls back to UTC dates and logs a note).
 
 ## Phase 3 — logistics docs → draft spec
 

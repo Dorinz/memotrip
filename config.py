@@ -3,9 +3,17 @@
 (consistent with this codebase's existing style — see local_env.py and the
 SESSION_SECRET fallback in webapp.py).
 
-    PUBLIC_BASE_URL     this service's own externally-reachable base URL —
-                        used to build OAuth redirect URIs and Cloud Tasks
-                        callback URLs. Defaults to localhost for local dev.
+    PUBLIC_BASE_URL     the site's externally-reachable base URL — used to
+                        build OAuth redirect URIs and email links. Defaults
+                        to localhost for local dev.
+    TASKS_TARGET_URL    base URL of the service that runs the background
+                        pipeline (/internal/tasks/*) — the private
+                        memotrip-worker Cloud Run service in prod, so heavy
+                        trip builds never share instances with the site.
+                        Set to the same value on BOTH services: the site
+                        enqueues to it, the worker checks Cloud Tasks' OIDC
+                        token was minted for it. Unset -> PUBLIC_BASE_URL
+                        (the site runs its own tasks, as before the split).
     DATABASE_URL        set -> db.py uses Postgres (Cloud SQL in prod).
                         unset -> db.py uses the local trips.db sqlite file.
     CLOUD_TASKS_QUEUE   set -> tasks.py enqueues via Cloud Tasks. Must be the
@@ -37,6 +45,7 @@ import pathlib
 ROOT = pathlib.Path(__file__).resolve().parent
 
 PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "http://localhost:8000")
+TASKS_TARGET_URL = os.environ.get("TASKS_TARGET_URL") or PUBLIC_BASE_URL
 DATABASE_URL = os.environ.get("DATABASE_URL")
 CLOUD_TASKS_QUEUE = os.environ.get("CLOUD_TASKS_QUEUE")
 TASKS_INVOKER_SA = os.environ.get("TASKS_INVOKER_SA")
