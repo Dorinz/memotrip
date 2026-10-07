@@ -40,7 +40,6 @@ def generate_json(
     contents,
     *,
     schema: dict | None = None,
-    temperature: float = 0.4,
     retries: int = 5,
     log=print,
     cl=None,
@@ -51,7 +50,6 @@ def generate_json(
     cl = cl or client()
     cfg = types.GenerateContentConfig(
         response_mime_type="application/json",
-        temperature=temperature,
         automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
         **({"response_schema": schema} if schema else {}),
     )

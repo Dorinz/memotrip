@@ -470,7 +470,7 @@ def _gemini_pick_raw(
             "required": ["picks"],
         }
         data = gu.generate_json(
-            model, [types.Content(role="user", parts=parts)], schema=schema, temperature=0.4, cl=cl
+            model, [types.Content(role="user", parts=parts)], schema=schema, cl=cl
         )
         idx = [int(x["index"]) for x in data.get("picks", []) if 0 <= int(x["index"]) < len(cands)]
         seen, ordered = set(), []

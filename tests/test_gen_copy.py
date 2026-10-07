@@ -143,7 +143,7 @@ def fake_gemini_util(monkeypatch):
     def _install(trip_response=None, days_response=None, trip_exc=None, days_exc=None):
         import gemini_util
 
-        def fake_generate_json(model, prompt, *, schema, temperature, cl=None, log=print):
+        def fake_generate_json(model, prompt, *, schema, cl=None, log=print):
             calls.append({"prompt": prompt, "schema": schema})
             is_days_call = "days" in schema.get("properties", {})
             if is_days_call:

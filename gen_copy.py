@@ -104,14 +104,13 @@ def _client(model: str):
     return genai.Client(api_key=api_key), types
 
 
-def _ask(client, types, model: str, prompt: str, schema: dict, temperature: float) -> dict:
+def _ask(client, types, model: str, prompt: str, schema: dict) -> dict:
     resp = client.models.generate_content(
         model=model,
         contents=prompt,
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
             response_schema=schema,
-            temperature=temperature,
             automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
         ),
     )
@@ -320,7 +319,7 @@ def generate_copy(
     try:
         log("trip-level copy ...")
         trip = gu.generate_json(
-            model, trip_prompt, schema=TRIP_SCHEMA, temperature=0.7, cl=cl, log=log
+            model, trip_prompt, schema=TRIP_SCHEMA, cl=cl, log=log
         )
         spec.setdefault("meta", {})
         fill(spec["meta"], trip.get("meta", {}), ("title",), overwrite)
@@ -345,7 +344,7 @@ def generate_copy(
         got = {
             (d.get("key"), d.get("dayIndex", 1)): d
             for d in gu.generate_json(
-                model, days_prompt, schema=DAYS_SCHEMA, temperature=0.7, cl=cl, log=log
+                model, days_prompt, schema=DAYS_SCHEMA, cl=cl, log=log
             ).get("days", [])
         }
         n = 0

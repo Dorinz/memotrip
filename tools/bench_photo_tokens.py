@@ -179,7 +179,6 @@ def live_call(cl, model, parts, schema) -> dict:
     cfg = types.GenerateContentConfig(
         response_mime_type="application/json",
         response_schema=schema,
-        temperature=0.4,
         automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
     )
     t0 = time.time()

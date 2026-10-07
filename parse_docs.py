@@ -301,7 +301,6 @@ def parse_ai(text: str, model: str, api_key: str | None = None, log=print) -> di
             model,
             AI_PROMPT + "\n\n---\n\n" + text[:60000],
             schema=AI_SCHEMA,
-            temperature=0.1,
             log=log,
         )
     except Exception as e:
@@ -375,7 +374,6 @@ def _gemini_coords(names: list[str], model: str, log=print) -> dict:
             "Give best-known WGS84 coordinates (town/area centre is fine) for each place. "
             "JSON only.\n" + "\n".join(f"- {n}" for n in names),
             schema=schema,
-            temperature=0,
             log=log,
         )
         return {
