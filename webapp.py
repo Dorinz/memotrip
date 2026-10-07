@@ -42,7 +42,14 @@ from zoneinfo import ZoneInfo
 import bcrypt
 import uvicorn
 from fastapi import FastAPI, Form, Header, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    PlainTextResponse,
+    RedirectResponse,
+    Response,
+)
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
@@ -96,6 +103,8 @@ app.mount("/static", StaticFiles(directory=str(ROOT / "static")), name="static")
 _TID_RE = re.compile(r"[0-9a-f]{32}")
 _PAGE_IMAGE_RE = re.compile(r"[\w.-]+\.jpg")
 PAGE_IMAGE_DIRS = ("trips", "lodging")  # lodging: only on pages built before it was dropped
+# a trip page is shared by link, not published - keep it (and its photos) out of search
+NOINDEX = {"X-Robots-Tag": "noindex, nofollow"}
 
 
 @app.get("/data/{tid}/page.html")
@@ -103,7 +112,7 @@ def trip_page(tid: str):
     f = trip_dir(tid) / "page.html" if _TID_RE.fullmatch(tid) else None
     if not (f and f.is_file()):
         raise HTTPException(404)
-    return FileResponse(f, media_type="text/html; charset=utf-8")
+    return FileResponse(f, media_type="text/html; charset=utf-8", headers=NOINDEX)
 
 
 @app.get("/data/{tid}/images/{kind}/{name}")
@@ -112,7 +121,7 @@ def trip_page_image(tid: str, kind: str, name: str):
     f = trip_dir(tid) / "images" / kind / name if ok else None
     if not (f and f.is_file()):
         raise HTTPException(404)
-    return FileResponse(f, media_type="image/jpeg")
+    return FileResponse(f, media_type="image/jpeg", headers=NOINDEX)
 
 
 # session cookie signing key - generated once, persisted locally (gitignored)
@@ -135,6 +144,7 @@ TPLDIR = ROOT / "webapp_templates"
 
 def render(name: str, **marks) -> HTMLResponse:
     page = (TPLDIR / name).read_text(encoding="utf-8")
+    marks.setdefault("BASE_URL", config.PUBLIC_BASE_URL.rstrip("/"))
     for k, v in marks.items():
         page = page.replace("{{" + k + "}}", v)
     return HTMLResponse(page)
@@ -672,6 +682,34 @@ def index(request: Request):
             "</div>"
         )
     return render("index.html", TRIPS=trips_html, ACCOUNT=account_html)
+
+
+# Search engines: only the landing page and the legal pages are worth indexing.
+# Trip pages are kept out with noindex (meta / X-Robots-Tag), not Disallow -
+# a disallowed URL is never fetched, so its noindex would never be seen.
+SITEMAP_PATHS = ("/", "/privacy", "/terms")
+
+
+@app.get("/robots.txt", response_class=PlainTextResponse)
+def robots_txt():
+    base = config.PUBLIC_BASE_URL.rstrip("/")
+    return (
+        "User-agent: *\n"
+        "Disallow: /oauth/\n"
+        "Disallow: /reset-password\n"
+        f"\nSitemap: {base}/sitemap.xml\n"
+    )
+
+
+@app.get("/sitemap.xml")
+def sitemap_xml():
+    base = config.PUBLIC_BASE_URL.rstrip("/")
+    urls = "".join(f"<url><loc>{base}{p}</loc></url>" for p in SITEMAP_PATHS)
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        f'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{urls}</urlset>'
+    )
+    return Response(xml, media_type="application/xml")
 
 
 @app.get("/privacy", response_class=HTMLResponse)
