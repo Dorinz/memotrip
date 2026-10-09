@@ -323,6 +323,30 @@
         background: none;
         color: var(--turquoise-deep);
       }
+      .share-title {
+        font-family: "Secular One", sans-serif;
+        font-size: 1.15rem;
+        color: var(--turquoise-deep);
+        margin-bottom: 14px;
+      }
+      .share-link {
+        display: block;
+        width: 100%;
+        font: inherit;
+        font-size: 0.82rem;
+        direction: ltr;
+        text-align: left;
+        color: var(--ink);
+        background: var(--bg-1);
+        border: 1px solid var(--line);
+        border-radius: 11px;
+        padding: 10px 12px;
+        margin-bottom: 14px;
+      }
+      .share-link:focus {
+        outline: 2px solid var(--turquoise);
+        outline-offset: 1px;
+      }
 
       /* the real page has a fixed-width sidebar that only sits beside the content
      above ~860px wide (see trip_template.html) - a naive 100%-width iframe in
@@ -411,7 +435,7 @@
 
       <div class="row" id="ready" style="display: none">
         <a class="btn" id="open" target="_blank">פתח בכרטיסייה חדשה</a>
-        <a class="btn ghost" id="dl" download="trip.html">הורדה</a>
+        <button class="ghost" id="share">שתף</button>
         <button class="ghost" id="addphotos">הוספת תמונות</button>
         <button class="ghost" id="reroll">עיצוב מחדש</button>
         <form method="post" action="/trips/{{TID}}/rerun" style="display: inline">
@@ -427,6 +451,15 @@
         <a class="btn" id="pickerlink" target="_blank">פתח את הבורר</a>
         <p style="margin-top: 14px">2. חוזרים לכאן ולוחצים:</p>
         <button class="btn" id="donepick">סיימתי לבחור</button>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="shareModal" hidden>
+      <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="shareTitle">
+        <button type="button" class="modal-close" id="shareModalClose" aria-label="סגירה">✕</button>
+        <div class="share-title" id="shareTitle" aria-live="polite"></div>
+        <input class="share-link" id="shareLink" type="text" readonly />
+        <button class="btn" id="shareCopy">העתק שוב</button>
       </div>
     </div>
 
@@ -482,7 +515,6 @@
           $("ready").style.display = "flex";
           const url = `/data/${TID}/page.html?t=` + Date.now();
           $("open").href = url;
-          $("dl").href = url;
           $("preview").src = url;
           $("previewWrap").style.display = "block";
           sizePreview();
@@ -495,6 +527,43 @@
         setTimeout(poll, 1500);
       }
       poll();
+
+      // share: the public page link (no cache-buster), copied on open
+      const shareModal = $("shareModal");
+      const shareUrl = `${location.origin}/data/${TID}/page.html`;
+      const copyShareLink = async () => {
+        const input = $("shareLink");
+        let ok = false;
+        try {
+          await navigator.clipboard.writeText(shareUrl);
+          ok = true;
+        } catch {
+          input.select();
+          try {
+            ok = document.execCommand("copy");
+          } catch {}
+        }
+        $("shareTitle").textContent = ok ? "הקישור הועתק ✓" : "העתיקו את הקישור:";
+        input.select();
+      };
+      const closeShareModal = () => {
+        shareModal.hidden = true;
+        $("share").focus();
+      };
+      $("share").onclick = () => {
+        $("shareLink").value = shareUrl;
+        $("shareTitle").textContent = "";
+        shareModal.hidden = false;
+        copyShareLink();
+      };
+      $("shareCopy").onclick = copyShareLink;
+      $("shareModalClose").onclick = closeShareModal;
+      shareModal.addEventListener("click", (e) => {
+        if (e.target === shareModal) closeShareModal();
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && !shareModal.hidden) closeShareModal();
+      });
 
       const pickModal = $("pickModal");
       function closePickModal() {
@@ -577,7 +646,6 @@
         }
         const url = `/data/${TID}/page.html?t=` + Date.now();
         $("open").href = url;
-        $("dl").href = url;
         $("preview").src = url;
       };
       $("donepick").onclick = async () => {
