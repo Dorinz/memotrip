@@ -343,6 +343,29 @@
         padding: 10px 12px;
         margin-bottom: 14px;
       }
+      .toast {
+        position: fixed;
+        bottom: 24px;
+        left: 50%;
+        transform: translate(-50%, 8px);
+        background: var(--ink);
+        color: #fff;
+        font-size: 0.88rem;
+        font-weight: 700;
+        border-radius: 11px;
+        padding: 10px 16px;
+        box-shadow: var(--shadow);
+        z-index: 60;
+        opacity: 0;
+        pointer-events: none;
+        transition:
+          opacity 0.2s,
+          transform 0.2s;
+      }
+      .toast.show {
+        opacity: 1;
+        transform: translate(-50%, 0);
+      }
       .share-link:focus {
         outline: 2px solid var(--turquoise);
         outline-offset: 1px;
@@ -454,6 +477,8 @@
       </div>
     </div>
 
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
     <div class="modal-overlay" id="shareModal" hidden>
       <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="shareTitle">
         <button type="button" class="modal-close" id="shareModalClose" aria-label="סגירה">✕</button>
@@ -550,11 +575,35 @@
         shareModal.hidden = true;
         $("share").focus();
       };
-      $("share").onclick = () => {
+      const openShareModal = () => {
         $("shareLink").value = shareUrl;
         $("shareTitle").textContent = "";
         shareModal.hidden = false;
         copyShareLink();
+      };
+      let toastTimer;
+      const toast = (msg) => {
+        const t = $("toast");
+        t.textContent = msg;
+        t.classList.add("show");
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => t.classList.remove("show"), 2500);
+      };
+      // one tap: copy + the device's share sheet (WhatsApp etc.). Both calls
+      // have to start synchronously inside the click - a share() after an
+      // await loses the tap's user activation and is refused. No share sheet
+      // (e.g. desktop Firefox) -> the dialog with the link instead.
+      $("share").onclick = () => {
+        if (!navigator.share) return openShareModal();
+        const copied = navigator.clipboard
+          ? navigator.clipboard.writeText(shareUrl).then(() => true, () => false)
+          : Promise.resolve(false);
+        navigator
+          .share({ title: "MemoTrip", url: shareUrl })
+          .catch((e) => (e.name === "AbortError" ? null : openShareModal()))
+          .finally(async () => {
+            if (shareModal.hidden && (await copied)) toast("הקישור הועתק ✓");
+          });
       };
       $("shareCopy").onclick = copyShareLink;
       $("shareModalClose").onclick = closeShareModal;
