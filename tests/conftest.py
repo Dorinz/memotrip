@@ -11,12 +11,20 @@ from __future__ import annotations
 
 import pathlib
 import sys
+import tempfile
 
 import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+
+# test modules `import webapp` at collection time, and that import runs
+# db.init_schema() - point it at a throwaway file before any of them load,
+# or it migrates the real local trips.db
+import db  # noqa: E402
+
+db.DB = pathlib.Path(tempfile.mkdtemp()) / "import-time.db"
 
 
 @pytest.fixture()

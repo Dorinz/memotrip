@@ -199,3 +199,11 @@ def test_index_page_lists_only_the_logged_in_users_own_trips(client, signup):
     r = client.get("/")
     assert "my own trip" in r.text or "(ללא תיאור)" in r.text
     assert "a guest trip" not in r.text
+
+
+def test_status_returns_the_log_lines_in_order(client):
+    r = client.post("/trips", data={"description": "x"}, follow_redirects=False)
+    tid = r.headers["location"].rsplit("/", 1)[-1]
+    webapp.logline(tid, "first")
+    webapp.logline(tid, "second\nwith a traceback")
+    assert client.get(f"/trips/{tid}/status").json()["log"] == "first\nsecond\nwith a traceback\n"

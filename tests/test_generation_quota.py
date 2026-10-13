@@ -29,12 +29,8 @@ def test_quota_message_matches_the_agreed_copy():
 def test_israel_day_bounds_are_24_wall_clock_hours_apart():
     now = dt.datetime(2026, 6, 15, 10, 0, tzinfo=dt.timezone.utc)  # deep summer, no DST edge
     start, end = webapp._israel_day_bounds_utc(now)
-    start_il = dt.datetime.strptime(start, "%Y-%m-%d %H:%M:%S").replace(
-        tzinfo=dt.timezone.utc
-    ).astimezone(webapp.ISRAEL_TZ)
-    end_il = dt.datetime.strptime(end, "%Y-%m-%d %H:%M:%S").replace(
-        tzinfo=dt.timezone.utc
-    ).astimezone(webapp.ISRAEL_TZ)
+    start_il = start.astimezone(webapp.ISRAEL_TZ)
+    end_il = end.astimezone(webapp.ISRAEL_TZ)
     assert (start_il.hour, start_il.minute, start_il.second) == (0, 0, 0)
     assert end_il - start_il == dt.timedelta(days=1)
 
@@ -43,9 +39,7 @@ def test_israel_day_bounds_place_a_late_utc_evening_in_the_next_israel_day():
     # 22:30 UTC in June is already past midnight in Israel (UTC+3 in summer)
     now = dt.datetime(2026, 6, 15, 22, 30, tzinfo=dt.timezone.utc)
     start, _ = webapp._israel_day_bounds_utc(now)
-    start_il = dt.datetime.strptime(start, "%Y-%m-%d %H:%M:%S").replace(
-        tzinfo=dt.timezone.utc
-    ).astimezone(webapp.ISRAEL_TZ)
+    start_il = start.astimezone(webapp.ISRAEL_TZ)
     assert start_il.date() == dt.date(2026, 6, 16)
 
 

@@ -288,19 +288,17 @@ def photo_owner_key(request: Request) -> str:
     return f"guest:{gid}"
 
 
-def _israel_day_bounds_utc(now_utc: dt.datetime | None = None) -> tuple[str, str]:
-    """[start, end) of "today" as lived in Israel, expressed as UTC-naive
-    strings comparable against generations.ts (also stored in that format) -
-    so the day boundary follows Israel's calendar/DST, not the server's."""
-    now_utc = now_utc or dt.datetime.now(dt.timezone.utc)
+def _israel_day_bounds_utc(
+    now_utc: dt.datetime | None = None,
+) -> tuple[dt.datetime, dt.datetime]:
+    """[start, end) of "today" as lived in Israel, as UTC datetimes to compare
+    against generations.ts - so the day boundary follows Israel's
+    calendar/DST, not the server's."""
+    now_utc = now_utc or _db.now_utc()
     now_il = now_utc.astimezone(ISRAEL_TZ)
     start_il = now_il.replace(hour=0, minute=0, second=0, microsecond=0)
     end_il = start_il + dt.timedelta(days=1)
-    fmt = "%Y-%m-%d %H:%M:%S"
-    return (
-        start_il.astimezone(dt.timezone.utc).strftime(fmt),
-        end_il.astimezone(dt.timezone.utc).strftime(fmt),
-    )
+    return start_il.astimezone(dt.timezone.utc), end_il.astimezone(dt.timezone.utc)
 
 
 def client_ip(request: Request) -> str:
@@ -340,7 +338,7 @@ def record_generation(identity: str, ip: str | None = None) -> None:
     with db() as c:
         c.execute(
             "INSERT INTO generations(identity, ts, ip) VALUES(?,?,?)",
-            (identity, dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M:%S"), ip),
+            (identity, _db.now_utc(), ip),
         )
 
 
@@ -353,10 +351,28 @@ def update(tid: str, **fields):
 
 
 def logline(tid: str, msg: str):
-    row = get_trip(tid)
-    log = (row["log"] or "") + msg + "\n"
-    update(tid, log=log)
+    """Append one entry to a trip's log - a single INSERT, so concurrent
+    writers never overwrite each other's lines."""
     print(f"[{tid[:8]}] {msg}")
+    with db() as c:
+        c.execute(
+            "INSERT INTO trip_logs(trip_id, ts, msg) VALUES(?,?,?)", (tid, _db.now_utc(), msg)
+        )
+
+
+def trip_log(tid: str) -> str:
+    """The trip's whole log as one text, a line per logline() call."""
+    with db() as c:
+        rows = c.execute(
+            "SELECT msg FROM trip_logs WHERE trip_id=? ORDER BY id", (tid,)
+        ).fetchall()
+    return "".join(r["msg"] + "\n" for r in rows)
+
+
+def local_time(value) -> str:
+    """A UTC timestamp column's value, shown in Israel time."""
+    t = _db.as_utc(value)
+    return t.astimezone(ISRAEL_TZ).strftime("%Y-%m-%d %H:%M") if t else ""
 
 
 # -------------------------------------------------------------------- pipeline
@@ -630,7 +646,7 @@ def trip_title(tid: str, row) -> str:
         except Exception:
             pass
     if not month:
-        month = (row["created"] or "")[:7]
+        month = local_time(row["created"])[:7]
     if region:
         return f"{month} {region}"
     return (row["description"] or "(ללא תיאור)")[:70]
@@ -650,7 +666,7 @@ def index(request: Request):
             f'<div class="trip-card">'
             f'<a class="t-link" href="/trips/{r["id"]}">'
             f'<div class="t"><div class="desc">{_html.escape(trip_title(r["id"], r))}</div>'
-            f'<div class="date mono">{r["created"]}</div></div>'
+            f'<div class="date mono">{local_time(r["created"])}</div></div>'
             f'<span class="pill {r["status"]}">{STATUS_LABELS.get(r["status"], r["status"])}</span>'
             f"</a>"
             f'<button type="button" class="del-btn" data-tid="{r["id"]}" '
@@ -785,7 +801,7 @@ def signup_submit(request: Request, email: str = Form(""), password: str = Form(
         with db() as c:
             c.execute(
                 "INSERT INTO users(email, password_hash, created) VALUES(?,?,?)",
-                (email, hash_password(password), time.strftime("%Y-%m-%d %H:%M")),
+                (email, hash_password(password), _db.now_utc()),
             )
     except Exception:
         # someone else's concurrent signup for the same email won the race
@@ -1052,16 +1068,15 @@ async def create(
     # that has no browser session/cookies to derive it from.
     with db() as c:
         c.execute(
-            "INSERT INTO trips(id, created, description, region_hint, status, stage, log, "
-            "picker_sid, user_id, photo_owner_key) VALUES(?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO trips(id, created, description, region_hint, status, stage, "
+            "picker_sid, user_id, photo_owner_key) VALUES(?,?,?,?,?,?,?,?,?)",
             (
                 tid,
-                time.strftime("%Y-%m-%d %H:%M"),
+                _db.now_utc(),
                 description,
                 region_hint,
                 "queued",
                 "queued",
-                "",
                 picker_sid or None,
                 user["id"] if user else None,
                 identity,
@@ -1084,7 +1099,10 @@ def status(tid: str):
     row = get_trip(tid)
     if not row:
         return JSONResponse({"error": "not found"}, status_code=404)
-    return {k: row[k] for k in ("status", "stage", "log", "error", "picker_uri")}
+    return {
+        **{k: row[k] for k in ("status", "stage", "error", "picker_uri")},
+        "log": trip_log(tid),
+    }
 
 
 @app.post("/trips/{tid}/photos/start")

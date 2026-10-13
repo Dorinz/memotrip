@@ -187,3 +187,90 @@ def test_q_leaves_placeholders_untouched_on_sqlite_path():
 def test_q_rewrites_placeholders_for_postgres(monkeypatch):
     monkeypatch.setattr(db, "_IS_PG", True)
     assert db._q("SELECT * FROM t WHERE id=?") == "SELECT * FROM t WHERE id=%s"
+
+
+# ------------------------------------------------- foreign keys, trip_logs, UTC timestamps
+
+
+def _user(c, email="a@b.com"):
+    c.execute(
+        "INSERT INTO users(email, password_hash, created) VALUES(?,?,?)",
+        (email, "h", db.now_utc()),
+    )
+    return c.execute("SELECT id FROM users WHERE email=?", (email,)).fetchone()["id"]
+
+
+def test_trip_user_id_must_point_at_a_real_user(db_path):
+    db.init_schema()
+    with pytest.raises(sqlite3.IntegrityError):
+        with db.db() as c:
+            c.execute("INSERT INTO trips(id, user_id) VALUES('t1', 999)")
+
+
+def test_deleting_a_user_deletes_their_trips_and_logs(db_path):
+    db.init_schema()
+    with db.db() as c:
+        uid = _user(c)
+        c.execute("INSERT INTO trips(id, user_id) VALUES('t1', ?)", (uid,))
+        c.execute("INSERT INTO trips(id) VALUES('guest-trip')")
+        c.execute("INSERT INTO trip_logs(trip_id, ts, msg) VALUES('t1', ?, 'hi')", (db.now_utc(),))
+    with db.db() as c:
+        c.execute("DELETE FROM users WHERE id=?", (uid,))
+    with db.db() as c:
+        trips = [r["id"] for r in c.execute("SELECT id FROM trips")]
+        logs = c.execute("SELECT COUNT(*) AS n FROM trip_logs").fetchone()["n"]
+    assert trips == ["guest-trip"]
+    assert logs == 0
+
+
+def test_migration_rebuilds_old_trips_table_with_fk_and_moves_log_out(db_path):
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "CREATE TABLE users(id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE NOT NULL, "
+        "password_hash TEXT NOT NULL, display_name TEXT, created TEXT)"
+    )
+    conn.execute("INSERT INTO users(id, email, password_hash) VALUES(1, 'a@b.com', 'h')")
+    conn.execute(
+        "CREATE TABLE trips(id TEXT PRIMARY KEY, created TEXT, description TEXT, "
+        "region_hint TEXT, status TEXT, stage TEXT, log TEXT, error TEXT, "
+        "picker_uri TEXT, picker_sid TEXT, user_id INTEGER, photo_owner_key TEXT)"
+    )
+    conn.execute(
+        "INSERT INTO trips(id, created, description, log, user_id) "
+        "VALUES('owned', '2026-01-01 10:00', 'x', 'line 1\nline 2\n', 1)"
+    )
+    conn.execute("INSERT INTO trips(id, log, user_id) VALUES('orphan', '', 42)")
+    conn.commit()
+    conn.close()
+
+    db.init_schema()
+    db.init_schema()  # rerunning must not duplicate the moved log
+
+    with db.db() as c:
+        cols = _columns(c, "trips")
+        fks = {r["table"] for r in c.execute("PRAGMA foreign_key_list(trips)")}
+        trips = {r["id"]: r for r in c.execute("SELECT * FROM trips")}
+        logs = c.execute("SELECT trip_id, msg FROM trip_logs").fetchall()
+    assert "log" not in cols
+    assert "users" in fks
+    assert trips["owned"]["user_id"] == 1
+    assert trips["owned"]["description"] == "x"
+    assert trips["orphan"]["user_id"] is None  # its user never existed
+    # the old local-time "HH:MM" value is now UTC with seconds
+    assert len(trips["owned"]["created"]) == 19
+    assert [(r["trip_id"], r["msg"]) for r in logs] == [("owned", "line 1\nline 2")]
+
+
+def test_datetime_params_are_stored_as_utc_text(db_path):
+    import datetime as dt
+
+    db.init_schema()
+    il = dt.timezone(dt.timedelta(hours=3))
+    with db.db() as c:
+        c.execute(
+            "INSERT INTO trips(id, created) VALUES('t1', ?)",
+            (dt.datetime(2026, 6, 15, 12, 30, tzinfo=il),),
+        )
+        row = c.execute("SELECT created FROM trips").fetchone()
+    assert row["created"] == "2026-06-15 09:30:00"
+    assert db.as_utc(row["created"]) == dt.datetime(2026, 6, 15, 9, 30, tzinfo=dt.timezone.utc)
