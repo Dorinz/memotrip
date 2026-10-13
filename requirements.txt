@@ -29,8 +29,9 @@ tzdata>=2024.1  # IANA tz database for zoneinfo - stdlib on Linux, but Windows/s
 bcrypt>=4.1
 itsdangerous>=2.2
 
-# db.py (Postgres backend, prod - Cloud SQL; unused when DATABASE_URL is unset)
+# db.py (Postgres - Cloud SQL in prod, docker-compose locally)
 psycopg2-binary>=2.9
+alembic>=1.13  # schema migrations - migrations/, run by db.init_schema()
 
 # tasks.py (Cloud Tasks backend, prod; unused when CLOUD_TASKS_QUEUE is unset)
 google-cloud-tasks>=2.16

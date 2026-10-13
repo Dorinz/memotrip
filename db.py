@@ -6,13 +6,17 @@ from docker-compose.yml in local dev (see .env), its memotrip_test database
 in tests (see tests/conftest.py). A RealDictCursor gives `row["col"]` access.
 
 Callers write SQL with `?` placeholders; _q() rewrites them to psycopg2's `%s`.
+The schema itself lives in Alembic migrations (migrations/versions/).
 """
 
 from __future__ import annotations
 
 import datetime as dt
+import pathlib
 
 import config
+
+ROOT = pathlib.Path(__file__).resolve().parent
 
 
 def now_utc() -> dt.datetime:
@@ -101,43 +105,12 @@ def db() -> _PGConn:
 
 
 def init_schema() -> None:
-    """Creates any missing table, index or column - safe to rerun on every
-    startup, and the one place a schema change is written. A new column goes
-    in its CREATE TABLE (for a fresh database) AND as an
-    `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` below it (for an existing one)."""
-    with db() as _c:
-        # several Cloud Run instances can start at once - only one runs this
-        # at a time (the lock is released at commit)
-        _c.execute("SELECT pg_advisory_xact_lock(4243001)")
-        _c.execute("""CREATE TABLE IF NOT EXISTS users(
-            id SERIAL PRIMARY KEY, email TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL, display_name TEXT, created TIMESTAMPTZ)""")
-        # user_id: nullable - a guest's trip has none, and is never listed
-        # under any account; deleting a user deletes their trips' rows
-        _c.execute("""CREATE TABLE IF NOT EXISTS trips(
-            id TEXT PRIMARY KEY, created TIMESTAMPTZ, description TEXT, region_hint TEXT,
-            status TEXT, stage TEXT, error TEXT, picker_uri TEXT, picker_sid TEXT,
-            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE, photo_owner_key TEXT)""")
-        # one row per logline() call - see webapp.logline()
-        _c.execute("""CREATE TABLE IF NOT EXISTS trip_logs(
-            id BIGSERIAL PRIMARY KEY,
-            trip_id TEXT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
-            ts TIMESTAMPTZ NOT NULL, msg TEXT NOT NULL)""")
-        _c.execute("CREATE INDEX IF NOT EXISTS idx_trip_logs_trip ON trip_logs(trip_id, id)")
-        # Google Photos OAuth tokens, keyed by owner_key - "user:<id>" for a
-        # logged-in account or "guest:<random>" for an anonymous session (see
-        # webapp.photo_owner_key), not a users.id FK, so a guest can connect
-        # their own Google Photos without ever creating a MemoTrip account.
-        _c.execute("""CREATE TABLE IF NOT EXISTS photo_accounts(
-            owner_key TEXT PRIMARY KEY,
-            refresh_token TEXT, access_token TEXT, token_expiry TEXT, granted TEXT)""")
-        # one row per Gemini-backed generation action (new trip / rerun / photo
-        # pick finish), keyed by the same identity as photo_owner_key, plus the
-        # client IP for a second, per-network daily cap (a guest identity
-        # resets by just clearing cookies) - see webapp.quota_exceeded().
-        _c.execute("""CREATE TABLE IF NOT EXISTS generations(
-            id SERIAL PRIMARY KEY, identity TEXT NOT NULL, ts TIMESTAMPTZ NOT NULL, ip TEXT)""")
-        _c.execute(
-            "CREATE INDEX IF NOT EXISTS idx_generations_identity_ts ON generations(identity, ts)"
-        )
-        _c.execute("CREATE INDEX IF NOT EXISTS idx_generations_ip_ts ON generations(ip, ts)")
+    """Bring the database at DATABASE_URL up to the latest schema: Alembic
+    runs every migration in migrations/versions/ it hasn't run there yet
+    (it records them in the alembic_version table). Called on every startup,
+    so a schema change - a new migration file - reaches each database (dev,
+    then prod on deploy) exactly once, with nothing to run by hand."""
+    from alembic import command
+    from alembic.config import Config
+
+    command.upgrade(Config(str(ROOT / "alembic.ini")), "head")

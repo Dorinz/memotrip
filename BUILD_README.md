@@ -301,9 +301,19 @@ The database is Postgres everywhere - Cloud SQL in prod, the
 `docker-compose.yml` container locally - so there is one schema and one code
 path. `.env` points the app at it:
 `DATABASE_URL=postgresql://memotrip:memotrip@127.0.0.1:5432/memotrip`.
-`db.init_schema()` runs on every startup and creates whatever is missing; a
-schema change is written there once and reaches each database (dev, then
-prod on deploy) the next time the app starts against it.
+Schema changes are Alembic migrations, one file each in `migrations/versions/`.
+Every database records which ones it has run (the `alembic_version` table),
+and the app runs the missing ones itself on every startup (`db.init_schema()`
+-> `alembic upgrade head`) - so a migration is written once and reaches each
+database (dev, then prod on deploy) exactly once, with nothing to run by hand.
+
+```
+python -m alembic revision -m "add cover photo to trips"   # new file - fill in upgrade()/downgrade()
+python -m alembic current                                   # where this database is
+python -m alembic downgrade -1                              # undo the last one (dev)
+```
+
+Never edit a migration that has been pushed - add a new one instead.
 
 The Gemini key: put it once in a `.env` file next to the scripts —
 `GEMINI_API_KEY=...` — and every script + the app loads it automatically

@@ -92,3 +92,25 @@ def test_timestamps_round_trip_as_the_same_utc_moment():
 
 def test_q_rewrites_placeholders_for_psycopg2():
     assert db._q("SELECT * FROM t WHERE id=?") == "SELECT * FROM t WHERE id=%s"
+
+
+# ------------------------------------------------------------- migrations
+
+
+def _script():
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    return ScriptDirectory.from_config(Config(str(db.ROOT / "alembic.ini")))
+
+
+def test_migrations_form_a_single_line():
+    # two migrations claiming the same parent would leave Alembic unsure
+    # which one is the latest - it refuses `upgrade head` then
+    assert len(_script().get_heads()) == 1
+
+
+def test_database_is_at_the_latest_migration():
+    with db.db() as c:
+        version = c.execute("SELECT version_num FROM alembic_version").fetchone()["version_num"]
+    assert version == _script().get_current_head()
