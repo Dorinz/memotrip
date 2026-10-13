@@ -1,7 +1,7 @@
 """Unit tests for fetch_photos.py's per-user (web app) OAuth token handling
 and the download() filename sanitization.
 
-Every test here uses the sqlite test.db fixture from conftest.py for the
+Every test here uses the test database from conftest.py for the
 photo_accounts table, and mocks google.oauth2.credentials.Credentials /
 google.auth.transport.requests.Request so no real Google endpoint is ever
 contacted.
@@ -22,9 +22,7 @@ import fetch_photos as fp
 
 
 @pytest.fixture()
-def photo_db(tmp_path, monkeypatch):
-    monkeypatch.setattr(db, "DB", tmp_path / "test.db")
-    db.init_schema()
+def photo_db():
     return db
 
 

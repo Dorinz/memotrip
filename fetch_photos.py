@@ -249,8 +249,7 @@ def authorise_for_user(owner_key: str, client_secrets_path: pathlib.Path) -> Aut
     and returns a ready-to-use AuthorizedSession. Raises PhotosNotConnected
     if there's no photo_accounts row yet for this owner_key (this also
     naturally covers an old guest trip predating per-guest identities, whose
-    photo_owner_key is None - "WHERE owner_key=NULL" matches no row in either
-    sqlite or Postgres)."""
+    photo_owner_key is None - "WHERE owner_key=NULL" matches no row)."""
     import db as _db
 
     with _db.db() as c:

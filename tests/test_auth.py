@@ -1,7 +1,7 @@
 """Unit tests for webapp.py's signup/login/logout routes and password helpers.
 
-Uses the `client` fixture from conftest.py (a throwaway sqlite DB per test),
-so none of this touches the real trips.db used by local dev.
+Uses the `client` fixture from conftest.py (the emptied-per-test test
+database), so none of this touches the dev database.
 """
 
 from __future__ import annotations

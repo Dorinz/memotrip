@@ -14,8 +14,9 @@ import pytest
 
 @pytest.fixture()
 def reload_config(monkeypatch):
-    """Reload config.py after the caller tweaks os.environ; reloads it back
-    to a clean state afterwards so later tests never see a stale monkeypatch."""
+    """Reload config.py after the caller tweaks os.environ; afterwards puts
+    os.environ back as it was and reloads again, so later tests never see a
+    stale monkeypatch (nor lose conftest's test DATABASE_URL)."""
     import config
 
     def _reload():
@@ -23,16 +24,7 @@ def reload_config(monkeypatch):
         return config
 
     yield _reload
-    for var in (
-        "PUBLIC_BASE_URL",
-        "TASKS_TARGET_URL",
-        "DATABASE_URL",
-        "CLOUD_TASKS_QUEUE",
-        "TASKS_INVOKER_SA",
-        "OAUTH_WEB_CLIENT_PATH",
-        "RESEND_API_KEY",
-    ):
-        monkeypatch.delenv(var, raising=False)
+    monkeypatch.undo()
     importlib.reload(config)
 
 

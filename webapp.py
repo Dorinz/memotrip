@@ -11,7 +11,7 @@ background (parse_docs -> geocode -> gen_copy -> build_trip) -> preview the page
 optionally "Add photos" (Google Photos Picker, reuses credentials.json / token.json)
 -> select_photos + rebuild.
 
-State lives in trips.db (sqlite) and webapp_data/<trip_id>/.
+State lives in Postgres (see db.py) and webapp_data/<trip_id>/.
 """
 
 from __future__ import annotations
@@ -152,10 +152,9 @@ def render(name: str, **marks) -> HTMLResponse:
 
 # ------------------------------------------------------------------------- db
 #
-# db.py picks the backend: sqlite (trips.db, exactly as before) for local dev,
-# or Postgres when DATABASE_URL is set (prod / Cloud SQL). db() is kept here
-# as a same-named wrapper so every existing `with db() as c: c.execute(...)`
-# call site below needs no changes.
+# Postgres at DATABASE_URL - Cloud SQL in prod, the docker-compose container
+# in local dev. db() is kept here as a same-named wrapper so every
+# `with db() as c: c.execute(...)` call site below reads the same.
 
 
 def db():

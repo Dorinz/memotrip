@@ -1,17 +1,21 @@
 """Shared pytest fixtures for MemoTrip's FastAPI app.
 
-Each test gets its own throwaway sqlite file (db.DB monkeypatched per test),
-so tests never see each other's data and never touch the real trips.db used
-by local dev. Nothing here talks to Postgres, Cloud Tasks, Resend, or Google
-Photos - those are only reached when their respective env vars are set,
-which they never are in a test run.
+Tests run against their own Postgres database, memotrip_test - by default on
+the local docker-compose server (`docker compose up -d`), or wherever
+TEST_DATABASE_URL points (Cloud Build). It is created if missing, and every
+table is emptied before each test, so tests never see each other's data and
+never touch the dev database in .env. Nothing here talks to Cloud Tasks,
+Resend, or Google Photos - those are only reached when their respective env
+vars are set, which they never are in a test run.
 """
 
 from __future__ import annotations
 
+import os
 import pathlib
 import sys
-import tempfile
+import time
+import urllib.parse
 
 import pytest
 
@@ -19,12 +23,54 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-# test modules `import webapp` at collection time, and that import runs
-# db.init_schema() - point it at a throwaway file before any of them load,
-# or it migrates the real local trips.db
+TEST_DATABASE_URL = os.environ.get(
+    "TEST_DATABASE_URL", "postgresql://memotrip:memotrip@127.0.0.1:5432/memotrip_test"
+)
+# the tests empty every table - refuse anything that isn't a test database
+assert urllib.parse.urlparse(TEST_DATABASE_URL).path.endswith("_test"), TEST_DATABASE_URL
+# set before anything imports config (which reads it once) - and since
+# local_env only fills in unset variables, .env's dev DATABASE_URL never wins
+os.environ["DATABASE_URL"] = TEST_DATABASE_URL
+
+
+def _create_test_database() -> None:
+    import psycopg2
+
+    url = urllib.parse.urlparse(TEST_DATABASE_URL)
+    name = url.path.lstrip("/")
+    # a just-started container (`docker compose up`, Cloud Build's postgres
+    # step) takes a few seconds before it accepts connections
+    for attempt in range(30):
+        try:
+            conn = psycopg2.connect(url._replace(path="/postgres").geturl())
+            break
+        except psycopg2.OperationalError:
+            if attempt == 29:
+                raise
+            time.sleep(1)
+    conn.autocommit = True  # CREATE DATABASE can't run inside a transaction
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT 1 FROM pg_database WHERE datname=%s", (name,))
+        if not cur.fetchone():
+            cur.execute(f'CREATE DATABASE "{name}"')
+    finally:
+        conn.close()
+
+
+_create_test_database()
+
 import db  # noqa: E402
 
-db.DB = pathlib.Path(tempfile.mkdtemp()) / "import-time.db"
+db.init_schema()
+
+_TABLES = "users, trips, trip_logs, photo_accounts, generations"
+
+
+@pytest.fixture(autouse=True)
+def _empty_tables():
+    with db.db() as c:
+        c.execute(f"TRUNCATE {_TABLES} RESTART IDENTITY CASCADE")
 
 
 @pytest.fixture()
@@ -45,12 +91,7 @@ def _stub_tasks_enqueue(monkeypatch):
 
 
 @pytest.fixture()
-def client(tmp_path, monkeypatch, _stub_tasks_enqueue):
-    import db
-
-    monkeypatch.setattr(db, "DB", tmp_path / "test.db")
-    db.init_schema()
-
+def client(_stub_tasks_enqueue):
     import webapp
     from fastapi.testclient import TestClient
 

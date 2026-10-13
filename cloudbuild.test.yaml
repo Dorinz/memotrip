@@ -1,6 +1,13 @@
 # Runs on every push to the `dev` branch (see the Cloud Build trigger).
 # Tests only - never deploys anything.
 steps:
+  # a throwaway Postgres for the tests (same major version as prod's Cloud
+  # SQL) - later steps reach it as host "pg" on Cloud Build's shared network
+  - id: postgres
+    name: gcr.io/cloud-builders/docker
+    args: [run, -d, --name=pg, --network=cloudbuild,
+           -e, POSTGRES_USER=memotrip, -e, POSTGRES_PASSWORD=memotrip, postgres:15]
+
   - name: python:3.12-slim
     entrypoint: bash
     args:
@@ -8,6 +15,8 @@ steps:
       - |
         pip install --no-cache-dir -r requirements.txt -r requirements-dev.txt
         pytest tests/ -v
+    env:
+      - TEST_DATABASE_URL=postgresql://memotrip:memotrip@pg:5432/memotrip_test
 
 options:
   logging: CLOUD_LOGGING_ONLY

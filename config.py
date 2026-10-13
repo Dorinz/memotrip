@@ -14,8 +14,9 @@ SESSION_SECRET fallback in webapp.py).
                         enqueues to it, the worker checks Cloud Tasks' OIDC
                         token was minted for it. Unset -> PUBLIC_BASE_URL
                         (the site runs its own tasks, as before the split).
-    DATABASE_URL        set -> db.py uses Postgres (Cloud SQL in prod).
-                        unset -> db.py uses the local trips.db sqlite file.
+    DATABASE_URL        Postgres connection string, required: Cloud SQL in
+                        prod, the docker-compose container in local dev
+                        (set in .env).
     CLOUD_TASKS_QUEUE   set -> tasks.py enqueues via Cloud Tasks. Must be the
                         full queue resource name:
                         projects/<project>/locations/<region>/queues/<queue>

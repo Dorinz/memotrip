@@ -1,0 +1,20 @@
+# Local dev database: the same Postgres major version as prod's Cloud SQL.
+#   docker compose up -d     start it (and again after a reboot, if stopped)
+#   docker compose down      stop it - the data stays in the pgdata volume
+# The app uses database "memotrip" (DATABASE_URL in .env); the tests create
+# and use their own "memotrip_test" database on the same server.
+services:
+  postgres:
+    image: postgres:15
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: memotrip
+      POSTGRES_PASSWORD: memotrip  # local only - the port is bound to localhost
+      POSTGRES_DB: memotrip
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

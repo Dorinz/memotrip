@@ -24,7 +24,7 @@ reference only; nothing in that folder is read by the app.)
 | `local_env.py` | loads `.env` (the `GEMINI_API_KEY`) |
 | `webapp.py` + `webapp_templates/` | the FastAPI app — this is the product |
 | `webapp_data/` | **app-generated state**: one folder per trip (`spec.json`, `images/`, `docs/`, `page.html`) |
-| `trips.db` | sqlite — trip list + pipeline status, used by `webapp.py` |
+| `db.py` + `docker-compose.yml` | Postgres — users, trips, logs, quotas; Cloud SQL in prod, a local Docker container in dev |
 | `credentials.json` / `token.json` | Google Photos Picker OAuth (shared across trips) |
 | `geocode_cache.json` | shared Nominatim lookup cache |
 
@@ -291,9 +291,19 @@ palette.generate_palette()` yourself before calling `build()`.
 ## Phase 4 — local web app (MVP)
 
 ```
+docker compose up -d            # the local Postgres (Docker Desktop must be running)
 pip install -r requirements.txt
 python webapp.py                # -> http://localhost:8000
+pytest                          # tests use their own memotrip_test database
 ```
+
+The database is Postgres everywhere - Cloud SQL in prod, the
+`docker-compose.yml` container locally - so there is one schema and one code
+path. `.env` points the app at it:
+`DATABASE_URL=postgresql://memotrip:memotrip@127.0.0.1:5432/memotrip`.
+`db.init_schema()` runs on every startup and creates whatever is missing; a
+schema change is written there once and reaches each database (dev, then
+prod on deploy) the next time the app starts against it.
 
 The Gemini key: put it once in a `.env` file next to the scripts —
 `GEMINI_API_KEY=...` — and every script + the app loads it automatically
@@ -304,7 +314,7 @@ Paste a description + upload logistics docs → the pipeline runs in a backgroun
 thread (parse_docs.assemble → expand_days → geocode → gen_copy → build_trip) →
 preview / download the page → "Add photos" runs the Google Photos Picker
 (reuses `credentials.json` / `token.json`) then select_photos + rebuild.
-State: `trips.db` (sqlite) + `webapp_data/<id>/`. Single user, localhost, no
+State: Postgres + `webapp_data/<id>/`. Single user, localhost, no
 app auth — that's the MVP.
 
 Without `GEMINI_API_KEY` it still builds a page, but thin: regex-only doc parsing
