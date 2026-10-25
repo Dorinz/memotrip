@@ -383,6 +383,32 @@ def _docs_text(tid: str) -> tuple[str, list[pathlib.Path]]:
     return text, files
 
 
+# What a build warning means for the person looking at their page. Only these
+# reach the banner on the trip page; the rest of spec["_warnings"] - conflicts
+# between the documents, date checks - is for us and stays in the build log.
+USER_NOTICES = (
+    (
+        "the model's itinerary couldn't be used",
+        "לא הצלחנו לקרוא את כל המסלול מהמסמכים, כך שייתכן שחסרים בדף חלקים מהטיול."
+        " אפשר לנסות לבנות את הדף שוב.",
+    ),
+    ("trip-level copy failed", "חלק מהטקסטים בדף לא נכתבו. אפשר לנסות לבנות את הדף שוב."),
+    ("day copy failed", "חלק מהטקסטים בדף לא נכתבו. אפשר לנסות לבנות את הדף שוב."),
+    ("no coordinates for", "לא מצאנו את המיקום של חלק מהמקומות, ולכן הם לא מופיעים במפה."),
+)
+
+
+def user_notice(warnings: list[str]) -> str | None:
+    """The banner text for these build warnings (Hebrew, one line per kind of
+    problem the user can act on), or None when none of them concern the user."""
+    out = []
+    for w in warnings:
+        for prefix, text in USER_NOTICES:
+            if w.startswith(prefix) and text not in out:
+                out.append(text)
+    return "\n".join(out) or None
+
+
 def run_build(tid: str):
     try:
         row = get_trip(tid)
@@ -481,9 +507,9 @@ def run_build(tid: str):
         html = build_trip.build(spec, TEMPLATE)
         (trip_dir(tid) / "page.html").write_bytes(html.replace("\r\n", "\n").encode("utf-8"))
 
-        warn = "\n".join(spec.get("_warnings", [])) or None
-        if warn:
-            logline(tid, "note: " + warn)
+        if spec.get("_warnings"):
+            logline(tid, "note: " + "\n".join(spec["_warnings"]))
+        warn = user_notice(spec.get("_warnings", []))
         logline(tid, "page built")
 
         # if photo access was already connected on the landing page, try to pick it

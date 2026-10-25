@@ -543,6 +543,8 @@
           $("preview").src = url;
           $("previewWrap").style.display = "block";
           sizePreview();
+          // a ready page with a notice (missing parts, unwritten text) can be rebuilt
+          $("errorActions").style.display = s.error ? "flex" : "none";
           return; // stop polling
         }
         if (s.status === "error") {
