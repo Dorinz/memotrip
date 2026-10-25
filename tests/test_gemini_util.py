@@ -109,3 +109,84 @@ def test_generate_json_logs_each_retry_attempt(monkeypatch):
     )
     assert len(messages) == 1
     assert "attempt 1/3" in messages[0]
+
+
+# --------------------------------------------- unusable answers (stuck-model loops)
+
+
+class _ScriptedModels:
+    """Stands in for genai.Client().models: answers each call with the next
+    (text, finish_reason) from `script`, and records each call's config."""
+
+    def __init__(self, script):
+        self.script = list(script)
+        self.calls = 0
+        self.configs = []
+
+    def generate_content(self, **kwargs):
+        self.calls += 1
+        self.configs.append(kwargs.get("config"))
+        text, finish = self.script.pop(0)
+        return SimpleNamespace(
+            text=text,
+            candidates=[SimpleNamespace(finish_reason=SimpleNamespace(name=finish))],
+            usage_metadata=SimpleNamespace(candidates_token_count=100, thoughts_token_count=50),
+        )
+
+
+GOOD = (json.dumps({"timeline": [1, 2, 3]}), "STOP")
+
+
+def _gen(models, **kw):
+    return gemini_util.generate_json("model", "prompt", cl=_fake_client(models), **kw)
+
+
+def test_answer_cut_off_at_the_token_limit_is_asked_for_again():
+    models = _ScriptedModels([('{"timeline": [1, 2', "MAX_TOKENS"), GOOD])
+    assert _gen(models, bad_retries=2, log=lambda m: None) == {"timeline": [1, 2, 3]}
+    assert models.calls == 2
+
+
+def test_broken_json_is_asked_for_again():
+    models = _ScriptedModels([('{"timeline": ["key: lisbon1. key: lisb', "STOP"), GOOD])
+    assert _gen(models, bad_retries=2, log=lambda m: None) == {"timeline": [1, 2, 3]}
+    assert models.calls == 2
+
+
+def test_answer_rejected_by_check_is_asked_for_again():
+    models = _ScriptedModels([(json.dumps({"timeline": [1]}), "STOP"), GOOD])
+
+    def check(d):
+        return "too short" if len(d["timeline"]) < 3 else None
+
+    assert _gen(models, check=check, bad_retries=2, log=lambda m: None) == {"timeline": [1, 2, 3]}
+    assert models.calls == 2
+
+
+def test_gives_up_with_bad_response_after_the_last_retry():
+    models = _ScriptedModels([("{", "MAX_TOKENS")] * 3)
+    with pytest.raises(gemini_util.BadResponse, match="token limit"):
+        _gen(models, bad_retries=2, log=lambda m: None)
+    assert models.calls == 3  # 1 try + 2 retries
+
+
+def test_without_bad_retries_a_broken_answer_fails_at_once():
+    models = _ScriptedModels([("not json", "STOP")])
+    with pytest.raises(gemini_util.BadResponse, match="not valid JSON"):
+        _gen(models, log=lambda m: None)
+    assert models.calls == 1
+
+
+def test_every_answer_logs_its_finish_reason_and_token_usage():
+    models = _ScriptedModels([("{", "MAX_TOKENS"), GOOD])
+    messages = []
+    _gen(models, bad_retries=1, log=messages.append)
+    assert "MAX_TOKENS · 100 out + 50 thinking tokens" in messages[0]
+    assert "unusable: cut off at the output token limit" in messages[1]
+    assert "STOP · 100 out + 50 thinking tokens" in messages[2]
+
+
+def test_max_output_tokens_reaches_the_request_config():
+    models = _ScriptedModels([GOOD])
+    _gen(models, max_output_tokens=24576, log=lambda m: None)
+    assert models.configs[0].max_output_tokens == 24576

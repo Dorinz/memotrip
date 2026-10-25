@@ -23,3 +23,9 @@ webapp.log
 
 # local Playwright MCP test artifacts (screenshots/snapshots)
 .playwright-mcp/
+
+# tools/trace_build.py output (one folder per traced trip)
+traces/
+
+# the fixed test input for before/after comparisons (personal trip docs - never commit)
+benchmark/

@@ -30,6 +30,9 @@ import json
 import os
 import pathlib
 import sys
+from concurrent.futures import ThreadPoolExecutor
+
+from parse_docs import MAX_DOC_CHARS
 
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -215,10 +218,15 @@ Produce JSON:
   2-4 words naming just the overall destination/region (e.g. "the Azores
   islands"), general — not an itinerary detail or a specific place visited.
   hero.meta: 4-5 {{n,l}} stat chips computed from the itinerary (islands /
-  countries, lodgings, flights, ferries, nights).
+  countries, lodgings, flights, ferries, nights); always include a flights chip
+  and a ferries chip when the itinerary has TRANSIT plane / ferry lines - count
+  those lines.
 - outro.eyebrow, outro.h2 (2-4 words), outro.p (2-3 sentences, the emotional
   close), outro.stats: 3 {{n,l}} chips.
 {drama_line}
+Numbers: don't invent any. Every number on the page (stat chips and text alike)
+must be stated in the trip description or countable from the itinerary above -
+no estimates, distances, percentages or totals that appear in neither.
 Return only the JSON."""
 
 DRAMA_LINE = (
@@ -307,7 +315,7 @@ def generate_copy(
     days_prompt = DAYS_PROMPT.format(
         lang=lang,
         description=description.strip(),
-        docs=(docs_text[:20000] or "(none provided)"),
+        docs=(docs_text[:MAX_DOC_CHARS] or "(none provided)"),
         days=days_blob,
     )
 
@@ -316,11 +324,19 @@ def generate_copy(
     cl = gu.client()
     fails = []
 
-    try:
-        log("trip-level copy ...")
-        trip = gu.generate_json(
-            model, trip_prompt, schema=TRIP_SCHEMA, cl=cl, log=log
+    # the two calls don't depend on each other - run them side by side; each
+    # result is merged (or its failure recorded) on its own, as before
+    log(f"trip-level copy + day copy ({len(days)}) ...")
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        trip_job = pool.submit(
+            gu.generate_json, model, trip_prompt, schema=TRIP_SCHEMA, cl=cl, log=log
         )
+        days_job = pool.submit(
+            gu.generate_json, model, days_prompt, schema=DAYS_SCHEMA, cl=cl, log=log
+        )
+
+    try:
+        trip = trip_job.result()
         spec.setdefault("meta", {})
         fill(spec["meta"], trip.get("meta", {}), ("title",), overwrite)
         for block in ("hero", "outro"):
@@ -340,13 +356,7 @@ def generate_copy(
         log(fails[-1])
 
     try:
-        log(f"day copy ({len(days)}) ...")
-        got = {
-            (d.get("key"), d.get("dayIndex", 1)): d
-            for d in gu.generate_json(
-                model, days_prompt, schema=DAYS_SCHEMA, cl=cl, log=log
-            ).get("days", [])
-        }
+        got = {(d.get("key"), d.get("dayIndex", 1)): d for d in days_job.result().get("days", [])}
         n = 0
         for it in spec["timeline"]:
             if it.get("type") not in ("day", "layover"):
@@ -420,7 +430,7 @@ def main() -> int:
     days_prompt = DAYS_PROMPT.format(
         lang=a.lang,
         description=description.strip(),
-        docs=(docs_text[:20000] or "(none provided)"),
+        docs=(docs_text[:MAX_DOC_CHARS] or "(none provided)"),
         days=days_blob,
     )
 

@@ -393,11 +393,18 @@ def run_build(tid: str):
         update(tid, status="running", stage="קורא את המסמכים", error=None)
         text, files = _docs_text(tid)
         logline(tid, f"read {len(files)} document(s), {len(text)} chars")
-        source = text + ("\n\n" + desc if desc else "")
-
         update(tid, stage="מנתח את המסלול")
-        rx = parse_docs.parse_docx_regex(source)
-        ai = parse_docs.parse_ai(source, MODEL, log=lambda m: logline(tid, m)) if key else None
+        # the regex parser takes the trip's year from the first line that has one,
+        # so the documents go first there; the model gets the description first,
+        # because parse_ai truncates its input and the cut should fall on the
+        # (possibly long) documents, never on what the user wrote
+        rx = parse_docs.parse_docx_regex(text + ("\n\n" + desc if desc else ""))
+        source = (desc + "\n\n" if desc else "") + text
+        ai = (
+            parse_docs.parse_ai(source, MODEL, log=lambda m: logline(tid, m), rx=rx)
+            if key
+            else None
+        )
         logline(
             tid,
             f"regex: {len(rx['flights'])}f/{len(rx['ferries'])}fe/{len(rx['stays'])}s"
@@ -405,6 +412,15 @@ def run_build(tid: str):
         )
 
         spec = parse_docs.assemble(ai, rx)
+        if key and not ai:
+            spec.setdefault("_warnings", []).append(
+                "the model's itinerary couldn't be used (see 'AI extraction failed' in the log) -"
+                " built from the regex parser alone, so the page may be missing parts of the trip"
+            )
+        for w in spec.get("_warnings", []):  # conflicts the model reported
+            logline(tid, "! " + w)
+        for w in parse_docs.check_consistency(spec):
+            logline(tid, "! " + w)
         for it in spec["timeline"]:
             if it.get("type") in ("stay", "layover") and it.get("key"):
                 spec.setdefault("photos", {}).setdefault(it["key"], {"lodging": [], "trip": []})

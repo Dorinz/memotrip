@@ -41,6 +41,8 @@ DRAFT = "trip_spec.draft.json"
 GEO_CACHE = "geocode_cache.json"
 NOMINATIM = "https://nominatim.openstreetmap.org/search"
 UA = "trip-journal-generator/0.1 (personal project)"
+# how much document text each model call gets (chars); shared with gen_copy.py
+MAX_DOC_CHARS = 60000
 
 IATA = {  # airport code -> (place name, geocode hint)
     "TLV": "תל אביב",
@@ -209,6 +211,65 @@ def parse_docx_regex(text: str) -> dict:
 
 # ----------------------------------------------------------------- AI extraction
 
+# fields any timeline item may carry
+_ITEM_FIELDS = {
+    "type": {"type": "string"},  # transit | stay | layover | drama
+    "mode": {"type": "string"},  # plane | ferry (transit only)
+    "from": {"type": "string"},
+    "to": {"type": "string"},
+    "fog": {"type": "string"},  # drama only: place name where it went wrong
+    "stops": {
+        "type": "array",
+        "items": {"type": "string"},
+    },  # display names, origin -> dest
+    "date": {"type": "string"},
+    "dateRange": {"type": "array", "items": {"type": "string"}},
+    "flightNo": {"type": "string"},
+    "route": {"type": "string"},
+    "key": {"type": "string"},
+    "city": {"type": "string"},
+    "island": {"type": "string"},
+    "host": {"type": "string"},
+    "code": {"type": "string"},
+    "via": {"type": "string"},
+}
+
+# A transit item must name where it goes from/to and when - without them the
+# page has no route line and no map arc, and with `type` as the only required
+# field the model sometimes left them out (writing the route into `note`).
+# anyOf lets that be required for transits only: a stay has no from/to.
+#
+# There is deliberately no free-text `note` field: it was where the model got
+# stuck in loops - copying whole documents into it, echoing the item's own
+# fields, inventing phone numbers and reviews (7 of 7 runaway fields seen on the
+# benchmark) - and what it held is shown elsewhere on the page anyway.
+_TRANSIT_ITEM = {
+    "type": "object",
+    "properties": {**_ITEM_FIELDS, "type": {"type": "string", "enum": ["transit"]}},
+    "required": ["type", "mode", "from", "to", "date"],
+}
+# Same for a stay: without its dates it can't be split into days, and the page
+# comes out with no days at all (seen on a real build: all 8 stays undated).
+_STAY_ITEM = {
+    "type": "object",
+    "properties": {
+        **_ITEM_FIELDS,
+        "type": {"type": "string", "enum": ["stay", "layover"]},
+        "dateRange": {
+            "type": "array",
+            "items": {"type": "string"},
+            "minItems": 2,
+            "maxItems": 2,
+        },
+    },
+    "required": ["type", "city", "dateRange"],
+}
+_DRAMA_ITEM = {
+    "type": "object",
+    "properties": {**_ITEM_FIELDS, "type": {"type": "string", "enum": ["drama"]}},
+    "required": ["type"],
+}
+
 AI_SCHEMA = {
     "type": "object",
     "properties": {
@@ -234,33 +295,10 @@ AI_SCHEMA = {
         },
         "timeline": {
             "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "type": {"type": "string"},  # transit | stay | layover | drama
-                    "mode": {"type": "string"},  # plane | ferry (transit only)
-                    "from": {"type": "string"},
-                    "to": {"type": "string"},
-                    "fog": {"type": "string"},  # drama only: place name where it went wrong
-                    "stops": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                    },  # display names, origin -> dest
-                    "date": {"type": "string"},
-                    "dateRange": {"type": "array", "items": {"type": "string"}},
-                    "flightNo": {"type": "string"},
-                    "route": {"type": "string"},
-                    "key": {"type": "string"},
-                    "city": {"type": "string"},
-                    "island": {"type": "string"},
-                    "host": {"type": "string"},
-                    "code": {"type": "string"},
-                    "via": {"type": "string"},
-                    "note": {"type": "string"},
-                },
-                "required": ["type"],
-            },
+            "items": {"anyOf": [_TRANSIT_ITEM, _STAY_ITEM, _DRAMA_ITEM]},
         },
+        # disagreements between the sources and which version was kept
+        "conflicts": {"type": "array", "items": {"type": "string"}},
     },
     "required": ["timeline", "places"],
 }
@@ -281,17 +319,88 @@ Return JSON matching the schema. Rules:
   `via` = the booking channel - "Airbnb" if the code looks like an Airbnb
   reservation code (e.g. starts "HM") or Airbnb is mentioned, "Booking.com" if
   that's mentioned, otherwise the hotel/site name if it's clearly a hotel, else
-  omit; a short lowercase-ascii `key` ("krakow1", "poprad2"). `note`: at most
-  ONE short sentence, or omit it.
+  omit; a short lowercase-ascii `key` ("krakow1", "poprad2").
 - `places`: EVERY distinct place used anywhere (every from/to/city/island/
   country), each with `name` in Latin or local script (NOT a foreign
   transliteration - e.g. "Kraków" not "קרקוב", "Tel Aviv" not "תל אביב") and
   its `lat`,`lon` (your best known coordinates; a town centre is fine).
+- Conflicts: the notes may come from several documents (a plan, a summary,
+  booking confirmations, the traveller's own description) that disagree - e.g.
+  two different lodgings for the same night, or a stay whose dates don't fit
+  the flights/ferries. Flights and ferries (dated bookings with times) are the
+  most reliable anchor: keep the version that fits them, so that you arrive at
+  each lodging on its check-in date and leave on its check-out date, and no
+  night is left without a lodging unless the notes really say so. Never merge
+  two versions into one. List every disagreement in `conflicts`, one short
+  English sentence each: what disagreed and which version you kept.
 - Do NOT invent prose. No `lede`, `about`, `tags`.
 """
 
 
-def parse_ai(text: str, model: str, api_key: str | None = None, log=print) -> dict | None:
+# A normal extraction answer is ~3K tokens plus up to ~9K of thinking; this cap
+# leaves room for that and stops an answer stuck in a loop in ~1.5 minutes
+# instead of running to the model's own 64K limit (~4 minutes).
+AI_MAX_OUTPUT_TOKENS = 24576
+
+
+def _cut_short(ai: dict, rx: dict | None) -> str | None:
+    """Why an extraction answer that parsed fine still looks cut short, or
+    None. The model sometimes escapes a loop by closing the JSON early, which
+    leaves a valid answer with most of the trip missing; the regex parser's
+    own count over the same text is the yardstick."""
+    tl = ai.get("timeline") or []
+    if not tl:
+        return "empty timeline"
+    if rx:
+        found = len(rx.get("flights", [])) + len(rx.get("ferries", [])) + len(rx.get("stays", []))
+        got = sum(1 for it in tl if it.get("type") in ("transit", "stay", "layover"))
+        if found >= 4 and got < 0.6 * found:
+            return f"only {got} flights/ferries/stays, the regex parser found {found}"
+    return None
+
+
+def _undated_stay(ai: dict) -> str | None:
+    """The first stay in the answer without a usable check-in/check-out, or
+    None - a backstop in case the schema's required dateRange isn't enforced."""
+    for it in ai.get("timeline") or []:
+        if it.get("type") not in ("stay", "layover"):
+            continue
+        rng = it.get("dateRange")
+        try:
+            date.fromisoformat(rng[0]), date.fromisoformat(rng[1])
+        except (TypeError, ValueError, IndexError, KeyError):
+            return f"{it.get('city') or it.get('key') or 'a'} stay has no check-in/check-out dates"
+    return None
+
+
+# Longest text a real field ever needed on the benchmark: ~250 chars (a `conflicts`
+# sentence); everything else stays under 30. A loop the model got out of on its own
+# leaves a field thousands of chars long (one `note` reached 3,803).
+AI_MAX_FIELD_CHARS = 500
+
+
+def _bloated(ai, path: str = "") -> str | None:
+    """The first text field in the answer that is far longer than any real one
+    (a sign of a loop the model escaped by itself), or None."""
+    if isinstance(ai, str):
+        if len(ai) > AI_MAX_FIELD_CHARS:
+            return f"{path or 'a field'} is {len(ai)} chars long: {ai[:60]!r}..."
+        return None
+    items = ai.items() if isinstance(ai, dict) else enumerate(ai) if isinstance(ai, list) else ()
+    for k, v in items:
+        found = _bloated(v, f"{path}.{k}" if isinstance(k, str) else f"{path}[{k}]")
+        if found:
+            return found
+    return None
+
+
+def parse_ai(
+    text: str, model: str, api_key: str | None = None, log=print, rx: dict | None = None
+) -> dict | None:
+    """The model's itinerary for `text`, or None. An unusable answer (cut off,
+    broken JSON, far shorter than `rx` - the regex parser's result on the same
+    text - suggests, a stay without dates, or a runaway text field) is asked for
+    again, up to 3 tries in all."""
     try:
         import gemini_util as gu
     except ImportError:
@@ -299,9 +408,12 @@ def parse_ai(text: str, model: str, api_key: str | None = None, log=print) -> di
     try:
         return gu.generate_json(
             model,
-            AI_PROMPT + "\n\n---\n\n" + text[:60000],
+            AI_PROMPT + "\n\n---\n\n" + text[:MAX_DOC_CHARS],
             schema=AI_SCHEMA,
             log=log,
+            max_output_tokens=AI_MAX_OUTPUT_TOKENS,
+            check=lambda ai: _cut_short(ai, rx) or _undated_stay(ai) or _bloated(ai),
+            bad_retries=2,
         )
     except Exception as e:
         log(f"  AI extraction failed: {e}")
@@ -480,8 +592,8 @@ def assemble(ai: dict | None, rx: dict, geo: dict | None = None) -> dict:
         # any place the model listed but nothing referenced -> still register it
         for p in ai.get("places", []):
             loc(p.get("name"))
-        # the model doesn't always fill drama.from/to/fog (they overlap awkwardly with
-        # the free-text note) - infer them from the surrounding stops when missing:
+        # the model doesn't always fill drama.from/to/fog - infer them from the
+        # surrounding stops when missing:
         # `from` = wherever we were stuck (the nearest earlier stay/transit), `to` = the
         # nearest later stop that's actually a different place (what we were trying to reach)
         for i, it in enumerate(spec["timeline"]):
@@ -507,6 +619,8 @@ def assemble(ai: dict | None, rx: dict, geo: dict | None = None) -> dict:
                         break
             it["from"], it["to"] = frm, to
             it["fog"] = it.get("fog") or to
+        if ai.get("conflicts"):
+            spec["_warnings"] = ["sources disagree: " + c for c in ai["conflicts"]]
         return spec
 
     # regex fallback: interleave flights/ferries/stays by date
@@ -571,6 +685,61 @@ def assemble(ai: dict | None, rx: dict, geo: dict | None = None) -> dict:
     if rx.get("year"):
         spec["meta"]["title"] = f"טיול {rx['year']}"
     return spec
+
+
+# ------------------------------------------------------------------ consistency
+
+
+def check_consistency(spec: dict) -> list[str]:
+    """Date problems in an assembled timeline (run it before expand_days):
+    nights between two stays with no lodging, stays that overlap, and a
+    flight/ferry that leaves in the middle of a stay - the usual signs that
+    the extraction mixed up two versions of the plan. Returns the warnings
+    and appends them to spec["_warnings"]; it never changes the timeline."""
+    def name(it):
+        return it.get("city") or it.get("key") or "?"
+
+    out = []
+    stays = []
+    for it in spec.get("timeline", []):
+        if it.get("type") not in ("stay", "layover"):
+            continue
+        rng = it.get("dateRange")
+        try:
+            stays.append((date.fromisoformat(rng[0]), date.fromisoformat(rng[1]), it))
+        except (TypeError, ValueError, IndexError, KeyError):
+            # can't be split into days or checked against the flights
+            out.append(f"{name(it)} stay has no valid check-in/check-out dates")
+    stays.sort(key=lambda s: s[0])
+
+    for (_, end, a), (start, _, b) in zip(stays, stays[1:]):
+        if start > end:
+            n = (start - end).days
+            out.append(
+                f"no lodging for {n} night(s) {end.isoformat()} -> {start.isoformat()}"
+                f" (between {name(a)} and {name(b)})"
+            )
+        elif start < end:
+            out.append(
+                f"stays overlap: {name(a)} until {end.isoformat()},"
+                f" {name(b)} from {start.isoformat()}"
+            )
+    for it in spec.get("timeline", []):
+        if it.get("type") != "transit" or not it.get("date"):
+            continue
+        try:
+            d = date.fromisoformat(it["date"])
+        except (TypeError, ValueError):
+            continue
+        for start, end, st in stays:
+            if start < d < end:
+                out.append(
+                    f"{it.get('mode') or 'transit'} on {d.isoformat()} falls in the middle"
+                    f" of the {name(st)} stay ({start.isoformat()} -> {end.isoformat()})"
+                )
+    if out:
+        spec.setdefault("_warnings", []).extend(out)
+    return out
 
 
 # --------------------------------------------------------------------- day split
@@ -671,7 +840,7 @@ def main() -> int:
         if not gu.have_key():
             print("  no GEMINI_API_KEY - using the regex parser only")
         else:
-            ai = parse_ai(text, a.model)
+            ai = parse_ai(text, a.model, rx=rx)
             if ai:
                 print(
                     f"  AI pass: {len(ai.get('timeline', []))} timeline items, "
@@ -679,6 +848,8 @@ def main() -> int:
                 )
 
     spec = assemble(ai, rx)
+    for w in check_consistency(spec):
+        print(f"  ! {w}")
     expand_days(spec)
     if a.geocode:
         fill_coords(spec, a.geocode_hint, a.model, root / GEO_CACHE)

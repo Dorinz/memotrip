@@ -8,6 +8,7 @@ gemini_util) so the suite never makes a real HTTP call.
 
 from __future__ import annotations
 
+import json
 import time
 
 import parse_docs
@@ -498,3 +499,246 @@ def test_geocode_skips_names_already_cached(tmp_path, monkeypatch):
     monkeypatch.setattr("requests.get", _boom)
     result = parse_docs.geocode(["Lisboa"], cache_path)
     assert result["Lisboa"] == {"lat": 1.0, "lon": 2.0}
+
+
+# ------------------------------------------------------------------ consistency
+
+
+def _stay(city, a, b):
+    return {"type": "stay", "city": city, "dateRange": [a, b]}
+
+
+def _transit(mode, d):
+    return {"type": "transit", "mode": mode, "date": d, "from": "x", "to": "y"}
+
+
+def test_consistency_clean_timeline_has_no_warnings():
+    spec = {
+        "timeline": [
+            _stay("Ponta Delgada", "2026-08-06", "2026-08-09"),
+            _transit("plane", "2026-08-09"),
+            _stay("Pico", "2026-08-09", "2026-08-10"),
+            _transit("ferry", "2026-08-10"),
+            _stay("Velas", "2026-08-10", "2026-08-12"),
+        ]
+    }
+    assert parse_docs.check_consistency(spec) == []
+    assert "_warnings" not in spec
+
+
+def test_consistency_flags_a_night_with_no_lodging():
+    spec = {
+        "timeline": [
+            _stay("Velas", "2026-08-09", "2026-08-11"),
+            _stay("Faial", "2026-08-12", "2026-08-13"),
+        ]
+    }
+    (w,) = parse_docs.check_consistency(spec)
+    assert "no lodging for 1 night(s) 2026-08-11 -> 2026-08-12" in w
+
+
+def test_consistency_flags_overlapping_stays():
+    spec = {
+        "timeline": [_stay("A", "2026-08-01", "2026-08-04"), _stay("B", "2026-08-03", "2026-08-05")]
+    }
+    (w,) = parse_docs.check_consistency(spec)
+    assert w.startswith("stays overlap: A until 2026-08-04, B from 2026-08-03")
+
+
+def test_consistency_flags_a_transit_inside_a_stay():
+    # the DOCX version of the Azores trip: Velas from the 9th, but the ferry there is on the 10th
+    spec = {
+        "timeline": [
+            _stay("Capelas", "2026-08-06", "2026-08-09"),
+            _stay("Velas", "2026-08-09", "2026-08-11"),
+            _transit("ferry", "2026-08-10"),
+        ]
+    }
+    (w,) = parse_docs.check_consistency(spec)
+    assert "ferry on 2026-08-10 falls in the middle of the Velas stay" in w
+
+
+def test_consistency_transit_on_checkin_or_checkout_day_is_fine():
+    spec = {
+        "timeline": [
+            _transit("plane", "2026-08-01"),
+            _stay("A", "2026-08-01", "2026-08-03"),
+            _transit("plane", "2026-08-03"),
+        ]
+    }
+    assert parse_docs.check_consistency(spec) == []
+
+
+def test_consistency_appends_to_existing_warnings_and_flags_bad_dates():
+    spec = {
+        "_warnings": ["earlier"],
+        "timeline": [
+            _stay("A", "2026-08-01", "2026-08-02"),
+            {"type": "stay", "city": "broken", "dateRange": ["?", None]},
+            _stay("B", "2026-08-03", "2026-08-04"),
+        ],
+    }
+    parse_docs.check_consistency(spec)
+    assert spec["_warnings"] == [
+        "earlier",
+        "broken stay has no valid check-in/check-out dates",
+        "no lodging for 1 night(s) 2026-08-02 -> 2026-08-03 (between A and B)",
+    ]
+
+
+def test_consistency_flags_stays_with_no_dates():
+    spec = {"timeline": [{"type": "stay", "city": "Velas"}]}
+    (w,) = parse_docs.check_consistency(spec)
+    assert w == "Velas stay has no valid check-in/check-out dates"
+
+
+def test_assemble_carries_model_reported_conflicts_into_warnings():
+    ai = {
+        "timeline": [_stay("Pico", "2026-08-09", "2026-08-10")],
+        "places": [],
+        "conflicts": ["PDF has Pico on 9 Aug, DOCX has Velas; kept the PDF"],
+    }
+    spec = parse_docs.assemble(ai, {"flights": [], "ferries": [], "stays": []})
+    assert spec["_warnings"] == [
+        "sources disagree: PDF has Pico on 9 Aug, DOCX has Velas; kept the PDF"
+    ]
+
+
+# ------------------------------------------------- cut-short answers + retries
+
+_RX_15 = {"flights": [{}] * 4, "ferries": [{}] * 3, "stays": [{}] * 8}
+
+
+def _ai(n_stays):
+    stay = {"type": "stay", "city": "X", "dateRange": ["2026-08-01", "2026-08-02"]}
+    return {"timeline": [stay] * n_stays, "places": []}
+
+
+def test_cut_short_flags_an_empty_timeline():
+    assert parse_docs._cut_short({"timeline": []}, None) == "empty timeline"
+
+
+def test_cut_short_flags_far_fewer_items_than_the_regex_found():
+    assert "only 2 flights/ferries/stays, the regex parser found 15" in parse_docs._cut_short(
+        _ai(2), _RX_15
+    )
+
+
+def test_cut_short_accepts_a_full_answer():
+    assert parse_docs._cut_short(_ai(15), _RX_15) is None
+
+
+def test_cut_short_skips_the_comparison_when_the_regex_found_little():
+    rx = {"flights": [{}], "ferries": [], "stays": [{}]}
+    assert parse_docs._cut_short(_ai(1), rx) is None
+
+
+def _scripted_gemini(monkeypatch, answers):
+    """Make gemini_util.client() return a fake whose generate_content answers
+    with the given (payload, finish_reason) pairs in turn."""
+    import json
+    from types import SimpleNamespace
+
+    import gemini_util
+
+    calls = []
+
+    def generate_content(**kw):
+        calls.append(kw)
+        payload, finish = answers.pop(0)
+        text = payload if isinstance(payload, str) else json.dumps(payload)
+        return SimpleNamespace(
+            text=text,
+            candidates=[SimpleNamespace(finish_reason=SimpleNamespace(name=finish))],
+            usage_metadata=SimpleNamespace(candidates_token_count=1, thoughts_token_count=1),
+        )
+
+    monkeypatch.setattr(
+        gemini_util, "client", lambda *a: SimpleNamespace(
+            models=SimpleNamespace(generate_content=generate_content)
+        )
+    )
+    return calls
+
+
+def test_parse_ai_retries_an_answer_closed_early_and_returns_the_full_one(monkeypatch):
+    calls = _scripted_gemini(monkeypatch, [(_ai(2), "STOP"), (_ai(15), "STOP")])
+    got = parse_docs.parse_ai("text", "m", log=lambda m: None, rx=_RX_15)
+    assert len(got["timeline"]) == 15
+    assert len(calls) == 2
+    assert calls[0]["config"].max_output_tokens == parse_docs.AI_MAX_OUTPUT_TOKENS
+
+
+def test_parse_ai_retries_a_loop_cut_off_at_the_token_limit(monkeypatch):
+    stuck = '{"timeline": [{"type": "stay", "note": "key: lisbon1. key: lisbon1. key: lis'
+    calls = _scripted_gemini(monkeypatch, [(stuck, "MAX_TOKENS"), (_ai(15), "STOP")])
+    assert len(parse_docs.parse_ai("text", "m", log=lambda m: None, rx=_RX_15)["timeline"]) == 15
+    assert len(calls) == 2
+
+
+def test_parse_ai_gives_up_after_three_bad_answers_and_returns_none(monkeypatch):
+    calls = _scripted_gemini(monkeypatch, [("{", "MAX_TOKENS")] * 3)
+    messages = []
+    assert parse_docs.parse_ai("text", "m", log=messages.append, rx=_RX_15) is None
+    assert len(calls) == 3
+    assert any("AI extraction failed" in m for m in messages)
+
+
+def test_bloated_accepts_normal_field_lengths():
+    ai = {"timeline": [{"type": "stay", "host": "Sara"}], "conflicts": ["x" * 249]}
+    assert parse_docs._bloated(ai) is None
+
+
+def test_bloated_flags_a_runaway_text_field_with_its_path():
+    ai = {"timeline": [{"type": "stay"}, {"type": "transit", "note": "key: lisbon1. " * 300}]}
+    found = parse_docs._bloated(ai)
+    assert found.startswith(".timeline[1].note is 4200 chars long")
+
+
+def test_parse_ai_retries_an_answer_with_a_runaway_field(monkeypatch):
+    bloated = _ai(15)
+    bloated["timeline"] = bloated["timeline"] + [{"type": "transit", "note": "✈️" * 1000}]
+    calls = _scripted_gemini(monkeypatch, [(bloated, "STOP"), (_ai(15), "STOP")])
+    got = parse_docs.parse_ai("text", "m", log=lambda m: None, rx=_RX_15)
+    assert len(got["timeline"]) == 15
+    assert len(calls) == 2
+
+
+def test_extraction_schema_has_no_free_text_note_anywhere():
+    assert "note" not in json.dumps(parse_docs.AI_SCHEMA)
+    assert "`note`" not in parse_docs.AI_PROMPT
+
+
+def test_schema_requires_city_and_dates_on_stays_and_route_on_transits():
+    transit, stay, drama = parse_docs.AI_SCHEMA["properties"]["timeline"]["items"]["anyOf"]
+    assert set(transit["required"]) == {"type", "mode", "from", "to", "date"}
+    assert set(stay["required"]) == {"type", "city", "dateRange"}
+    assert stay["properties"]["type"]["enum"] == ["stay", "layover"]
+    assert drama["required"] == ["type"]
+
+
+def test_undated_stay_flags_a_stay_without_dates():
+    ai = {"timeline": [{"type": "stay", "city": "Lisbon"}]}
+    assert parse_docs._undated_stay(ai) == "Lisbon stay has no check-in/check-out dates"
+
+
+def test_undated_stay_accepts_dated_stays_and_ignores_transits():
+    ai = {
+        "timeline": [
+            {"type": "transit", "date": "2026-08-03"},
+            {"type": "stay", "city": "Lisbon", "dateRange": ["2026-08-03", "2026-08-04"]},
+        ]
+    }
+    assert parse_docs._undated_stay(ai) is None
+
+
+def test_parse_ai_retries_an_answer_with_undated_stays(monkeypatch):
+    undated = {"timeline": [{"type": "stay", "city": "X"}] * 15, "places": []}
+    dated = {
+        "timeline": [{"type": "stay", "city": "X", "dateRange": ["2026-08-01", "2026-08-02"]}] * 15,
+        "places": [],
+    }
+    calls = _scripted_gemini(monkeypatch, [(undated, "STOP"), (dated, "STOP")])
+    got = parse_docs.parse_ai("text", "m", log=lambda m: None, rx=_RX_15)
+    assert got["timeline"][0]["dateRange"] == ["2026-08-01", "2026-08-02"]
+    assert len(calls) == 2
